@@ -136,7 +136,7 @@ const SectionFooter = props => {
                 <BlockBuilder blocks={linksWithBlockId} sectionId={sectionId} options={options} />
               </div>
             ) : null}
-            <Field data={copyright} className={css.copyright} />
+            <Field data={copyright && {...copyright, content: copyright.content ? copyright.content.replace(/\d{4}/, new Date().getFullYear()) : copyright.content}} className={css.copyright} />
           </div>
           <div className={classNames(css.grid, getGridCss(numberOfColumns))}>
             <BlockBuilder blocks={blocks} sectionId={sectionId} options={options} />
