@@ -72,6 +72,7 @@ export const FieldAddImage = props => {
         const { name, type } = input;
         const onChange = e => {
           const file = e.target.files[0];
+          console.log('FieldAddImage onChange fired', { file, name });
           formApi.change(`addImage`, file);
           formApi.blur(`addImage`);
           onImageUploadHandler(file);

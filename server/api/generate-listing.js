@@ -4,22 +4,44 @@ const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
+const normalizeMediaType = (mediaType) => {
+  if (!mediaType) return 'image/jpeg';
+  if (mediaType === 'image/jpg') return 'image/jpeg';
+  if (['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(mediaType)) return mediaType;
+  return 'image/jpeg';
+};
+
 module.exports = async (req, res) => {
   try {
+    console.log('Received request body keys:', Object.keys(req.body || {}));
+    console.log('Images array length:', req.body?.images?.length);
+
     const { images, category } = req.body;
 
     if (!images || images.length === 0) {
       return res.status(400).json({ error: 'No images provided' });
     }
 
-    // Build image content for Claude
-    const imageContent = images.map(image => ({
-      type: 'image',
-      source: {
-        type: 'base64',
-        media_type: image.mediaType,
-        data: image.data,
-      },
+    // Build image content for Claude, fetching URLs server-side if needed
+    const imageContent = await Promise.all(images.map(async image => {
+      let base64 = image.data;
+      let mediaType = image.mediaType;
+
+      if (typeof image.data === 'string' && image.data.startsWith('http')) {
+        const imgResponse = await fetch(image.data);
+        const buffer = await imgResponse.arrayBuffer();
+        base64 = Buffer.from(buffer).toString('base64');
+        mediaType = imgResponse.headers.get('content-type') || 'image/jpeg';
+      }
+
+      return {
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: normalizeMediaType(mediaType),
+          data: base64,
+        },
+      };
     }));
 
     const response = await client.messages.create({
@@ -54,11 +76,12 @@ module.exports = async (req, res) => {
     });
 
     const content = response.content[0].text;
-    const listing = JSON.parse(content);
+    const cleanContent = content.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+    const listing = JSON.parse(cleanContent);
 
     res.json({ success: true, listing });
   } catch (error) {
-    console.error('Error generating listing:', error);
+    console.error('Full error:', error);
     res.status(500).json({ error: 'Failed to generate listing details' });
   }
 };

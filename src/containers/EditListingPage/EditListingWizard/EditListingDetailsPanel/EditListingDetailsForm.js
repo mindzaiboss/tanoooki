@@ -355,6 +355,7 @@ const EditListingDetailsForm = props => (
       const [imageUploadRequested, setImageUploadRequested] = useState(false);
 
       const onImageUploadHandler = file => {
+        console.log('onImageUploadHandler called', { file, hasOnImageUpload: typeof onImageUpload === 'function' });
         if (file && typeof onImageUpload === 'function') {
           setImageUploadRequested(true);
           Promise.resolve(onImageUpload({ id: `${file.name}_${Date.now()}`, file }, listingImageConfig))
@@ -368,8 +369,7 @@ const EditListingDetailsForm = props => (
         setAiError(null);
 
         try {
-          // Get images from the form
-          const images = formApi.getState().values.images;
+          // Get images from Redux prop (images are managed outside FinalForm state)
 
           if (!images || images.length === 0) {
             setAiError('Please upload at least one photo first, then click Generate with AI.');
@@ -377,24 +377,12 @@ const EditListingDetailsForm = props => (
             return;
           }
 
-          // Convert images to base64 for the API
-          const imagePromises = images.map(async (image) => {
-            const response = await fetch(image.attributes?.variants?.['listing-card']?.url || image.imageUrl);
-            const blob = await response.blob();
-            return new Promise((resolve) => {
-              const reader = new FileReader();
-              reader.onloadend = () => {
-                const base64 = reader.result.split(',')[1];
-                resolve({
-                  data: base64,
-                  mediaType: blob.type || 'image/jpeg',
-                });
-              };
-              reader.readAsDataURL(blob);
-            });
-          });
-
-          const imageData = await Promise.all(imagePromises);
+          // Send CDN URLs to the server — the server fetches and converts to base64
+          const imageData = images.map(image => ({
+            data: image.attributes?.variants?.['listing-card']?.url
+              || image.attributes?.variants?.['scaled-small']?.url
+              || image.imageUrl,
+          }));
 
           const res = await fetch('/api/generate-listing', {
             method: 'POST',
@@ -405,9 +393,25 @@ const EditListingDetailsForm = props => (
           const data = await res.json();
 
           if (data.success && data.listing) {
-            const { title, description } = data.listing;
+            const { title, description, brand, series, condition, edition } = data.listing;
             if (title) formApi.change('title', title);
             if (description) formApi.change('description', description);
+            if (brand) formApi.change('pub_brand', brand);
+            if (series) formApi.change('pub_series', series);
+            if (condition) {
+              if (condition === 'New / Sealed') formApi.change('pub_itemcondition', 'new-sealed');
+              else if (condition === 'Opened / Used') formApi.change('pub_itemcondition', 'opened-used');
+            }
+            if (edition) {
+              const editionMap = {
+                'Standard Edition': 'standard-edition',
+                'Limited Edition': 'limited-edition',
+                'Special Edition': 'special-edition',
+                'Exclusive Edition': 'exclusive-edition',
+              };
+              const mapped = editionMap[edition] || edition.toLowerCase().replace(/\s+/g, '-');
+              formApi.change('pub_edition', mapped);
+            }
           } else {
             setAiError('Could not generate listing details. Please try again.');
           }
@@ -447,16 +451,14 @@ const EditListingDetailsForm = props => (
       const hasCategories = selectableCategories && selectableCategories.length > 0;
       const showCategories = listingType && hasCategories;
 
-      const showTitle = hasCategories ? allCategoriesChosen : listingType;
+      const showTitle = !!listingType;
 
       const config = useConfiguration();
       const listingTypeConfig = getListingTypeConfig(config, listingType);
       const showDescriptionMaybe = displayDescription(listingTypeConfig);
-      const showDescription = hasCategories
-        ? allCategoriesChosen && showDescriptionMaybe
-        : showDescriptionMaybe;
+      const showDescription = showDescriptionMaybe;
 
-      const showListingFields = hasCategories ? allCategoriesChosen : listingType;
+      const showListingFields = !!listingType;
 
       const classes = classNames(css.root, className);
       const submitReady = (updated && pristine) || ready;
@@ -482,18 +484,6 @@ const EditListingDetailsForm = props => (
             formId={formId}
             intl={intl}
           />
-
-          {showCategories && isCompatibleCurrency && (
-            <FieldSelectCategory
-              values={values}
-              prefix={categoryPrefix}
-              listingCategories={selectableCategories}
-              formApi={formApi}
-              intl={intl}
-              allCategoriesChosen={allCategoriesChosen}
-              setAllCategoriesChosen={setAllCategoriesChosen}
-            />
-          )}
 
           <div className={css.imagesSection}>
             <div className={css.imagesFieldArray}>
@@ -548,6 +538,18 @@ const EditListingDetailsForm = props => (
               {aiError && <p className={css.aiError}>{aiError}</p>}
             </div>
           </div>
+
+          {showCategories && isCompatibleCurrency && (
+            <FieldSelectCategory
+              values={values}
+              prefix={categoryPrefix}
+              listingCategories={selectableCategories}
+              formApi={formApi}
+              intl={intl}
+              allCategoriesChosen={allCategoriesChosen}
+              setAllCategoriesChosen={setAllCategoriesChosen}
+            />
+          )}
 
           {showTitle && isCompatibleCurrency && (
             <FieldTextInput

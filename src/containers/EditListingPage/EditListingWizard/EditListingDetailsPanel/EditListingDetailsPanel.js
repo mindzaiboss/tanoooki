@@ -461,6 +461,7 @@ const EditListingDetailsPanel = props => {
           updated={panelUpdated}
           updateInProgress={updateInProgress}
           fetchErrors={errors}
+          images={images}
           onImageUpload={onImageUpload}
           onRemoveImage={onRemoveImage}
           listingImageConfig={listingImageConfig}
