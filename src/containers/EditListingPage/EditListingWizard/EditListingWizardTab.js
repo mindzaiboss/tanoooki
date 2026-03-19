@@ -201,6 +201,10 @@ const EditListingWizardTab = props => {
           {...panelProps(DETAILS)}
           onListingTypeChange={onListingTypeChange}
           config={config}
+          images={images}
+          onImageUpload={onImageUpload}
+          onRemoveImage={onRemoveImage}
+          listingImageConfig={config.layout.listingImage}
         />
       );
     }

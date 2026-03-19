@@ -309,6 +309,10 @@ const EditListingDetailsPanel = props => {
     config,
     updatePageTitle: UpdatePageTitle,
     intl,
+    images,
+    onImageUpload,
+    onRemoveImage,
+    listingImageConfig,
   } = props;
 
   const classes = classNames(rootClassName || css.root, className);
@@ -387,6 +391,7 @@ const EditListingDetailsPanel = props => {
           saveActionMsg={submitButtonText}
           onSubmit={values => {
             const {
+              addImage: _addImage,
               title,
               description,
               listingType,
@@ -419,6 +424,7 @@ const EditListingDetailsPanel = props => {
             const updateValues = {
               title: title.trim(),
               description,
+              images,
               publicData: {
                 listingType,
                 transactionProcessAlias,
@@ -455,6 +461,9 @@ const EditListingDetailsPanel = props => {
           updated={panelUpdated}
           updateInProgress={updateInProgress}
           fetchErrors={errors}
+          onImageUpload={onImageUpload}
+          onRemoveImage={onRemoveImage}
+          listingImageConfig={listingImageConfig}
           autoFocus
         />
       ) : (

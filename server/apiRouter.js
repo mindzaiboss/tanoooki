@@ -6,6 +6,8 @@
  * endpoints are prefixed in the main server where this file is used.
  */
 
+const generateListing = require('./api/generate-listing');
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const { deserialize } = require('./api-util/sdk');
@@ -25,6 +27,9 @@ const { authenticateGoogle, authenticateGoogleCallback } = require('./api/auth/g
 const router = express.Router();
 
 // ================ API router middleware: ================ //
+
+// Parse JSON bodies (e.g. /api/generate-listing)
+router.use(bodyParser.json());
 
 // Parse Transit body first to a string
 router.use(
@@ -56,6 +61,7 @@ router.post('/transaction-line-items', transactionLineItems);
 router.post('/initiate-privileged', initiatePrivileged);
 router.post('/transition-privileged', transitionPrivileged);
 router.post('/delete-account', deleteAccount);
+router.post('/generate-listing', generateListing);
 
 // Create user with identity provider (e.g. Facebook or Google)
 // This endpoint is called to create a new user after user has confirmed

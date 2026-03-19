@@ -54,7 +54,17 @@ const ShowListingsError = props => {
 
 // Field component that uses file-input to allow user to select images.
 export const FieldAddImage = props => {
-  const { formApi, onImageUploadHandler, aspectWidth = 1, aspectHeight = 1, ...rest } = props;
+  const {
+    formApi,
+    onImageUploadHandler,
+    aspectWidth = 1,
+    aspectHeight = 1,
+    inputClassName,
+    wrapperClassName,
+    labelClassName,
+    ...rest
+  } = props;
+  const inputRef = React.useRef(null);
   return (
     <Field form={null} {...rest}>
       {fieldprops => {
@@ -68,12 +78,23 @@ export const FieldAddImage = props => {
         };
         const inputProps = { accept, id: name, name, onChange, type };
         return (
-          <div className={css.addImageWrapper}>
+          <div
+            className={wrapperClassName || css.addImageWrapper}
+            onClick={() => {
+              if (!fieldDisabled && inputRef.current) {
+                inputRef.current.click();
+              }
+            }}
+          >
             <AspectRatioWrapper width={aspectWidth} height={aspectHeight}>
-              {fieldDisabled ? null : <input {...inputProps} className={css.addImageInput} />}
-              <label htmlFor={name} className={css.addImage}>
-                {label}
-              </label>
+              {fieldDisabled ? null : (
+                <input
+                  {...inputProps}
+                  ref={inputRef}
+                  className={inputClassName || css.addImageInput}
+                />
+              )}
+              <label className={labelClassName || css.addImage}>{label}</label>
             </AspectRatioWrapper>
           </div>
         );
@@ -83,7 +104,7 @@ export const FieldAddImage = props => {
 };
 
 // Component that shows listing images from "images" field array
-const FieldListingImage = props => {
+export const FieldListingImage = props => {
   const { name, intl, onRemoveImage, aspectWidth, aspectHeight, variantPrefix } = props;
   return (
     <Field name={name}>

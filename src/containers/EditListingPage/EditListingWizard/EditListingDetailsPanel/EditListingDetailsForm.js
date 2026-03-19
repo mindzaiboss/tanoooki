@@ -25,6 +25,8 @@ import {
   CustomExtendedDataField,
 } from '../../../../components';
 // Import modules from this directory
+import { FieldAddImage } from '../EditListingPhotosPanel/EditListingPhotosForm';
+import ListingImage from '../EditListingPhotosPanel/ListingImage';
 import css from './EditListingDetailsForm.module.css';
 
 const TITLE_MAX_LENGTH = 60;
@@ -259,17 +261,17 @@ const AddListingFields = props => {
 
     return isKnownSchemaType && isProviderScope && isTargetListingType && isTargetCategory
       ? [
-          ...pickedFields,
-          <CustomExtendedDataField
-            key={namespacedKey}
-            name={namespacedKey}
-            fieldConfig={fieldConfig}
-            defaultRequiredMessage={intl.formatMessage({
-              id: 'EditListingDetailsForm.defaultRequiredMessage',
-            })}
-            formId={formId}
-          />,
-        ]
+        ...pickedFields,
+        <CustomExtendedDataField
+          key={namespacedKey}
+          name={namespacedKey}
+          fieldConfig={fieldConfig}
+          defaultRequiredMessage={intl.formatMessage({
+            id: 'EditListingDetailsForm.defaultRequiredMessage',
+          })}
+          formId={formId}
+        />,
+      ]
       : pickedFields;
   }, []);
 
@@ -337,12 +339,85 @@ const EditListingDetailsForm = props => (
         fetchErrors,
         listingFieldsConfig = [],
         listingCurrency,
+        onImageUpload,
+        onRemoveImage,
+        listingImageConfig,
+        images,
         values,
       } = formRenderProps;
 
       const intl = useIntl();
       const { listingType, transactionProcessAlias, unitType } = values;
+      const { aspectWidth = 1, aspectHeight = 1, variantPrefix } = listingImageConfig || {};
       const [allCategoriesChosen, setAllCategoriesChosen] = useState(false);
+      const [isGenerating, setIsGenerating] = useState(false);
+      const [aiError, setAiError] = useState(null);
+      const [imageUploadRequested, setImageUploadRequested] = useState(false);
+
+      const onImageUploadHandler = file => {
+        if (file && typeof onImageUpload === 'function') {
+          setImageUploadRequested(true);
+          Promise.resolve(onImageUpload({ id: `${file.name}_${Date.now()}`, file }, listingImageConfig))
+            .then(() => setImageUploadRequested(false))
+            .catch(() => setImageUploadRequested(false));
+        }
+      };
+
+      const handleGenerateListing = async () => {
+        setIsGenerating(true);
+        setAiError(null);
+
+        try {
+          // Get images from the form
+          const images = formApi.getState().values.images;
+
+          if (!images || images.length === 0) {
+            setAiError('Please upload at least one photo first, then click Generate with AI.');
+            setIsGenerating(false);
+            return;
+          }
+
+          // Convert images to base64 for the API
+          const imagePromises = images.map(async (image) => {
+            const response = await fetch(image.attributes?.variants?.['listing-card']?.url || image.imageUrl);
+            const blob = await response.blob();
+            return new Promise((resolve) => {
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                const base64 = reader.result.split(',')[1];
+                resolve({
+                  data: base64,
+                  mediaType: blob.type || 'image/jpeg',
+                });
+              };
+              reader.readAsDataURL(blob);
+            });
+          });
+
+          const imageData = await Promise.all(imagePromises);
+
+          const res = await fetch('/api/generate-listing', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: imageData }),
+          });
+
+          const data = await res.json();
+
+          if (data.success && data.listing) {
+            const { title, description } = data.listing;
+            if (title) formApi.change('title', title);
+            if (description) formApi.change('description', description);
+          } else {
+            setAiError('Could not generate listing details. Please try again.');
+          }
+        } catch (error) {
+          console.error('AI generation error:', error);
+          setAiError('Something went wrong. Please try again.');
+        } finally {
+          setIsGenerating(false);
+        }
+      };
 
       const titleRequiredMessage = intl.formatMessage({
         id: 'EditListingDetailsForm.titleRequired',
@@ -419,6 +494,60 @@ const EditListingDetailsForm = props => (
               setAllCategoriesChosen={setAllCategoriesChosen}
             />
           )}
+
+          <div className={css.imagesSection}>
+            <div className={css.imagesFieldArray}>
+              {(images || []).map(image => (
+                <ListingImage
+                  key={image?.id?.uuid || image?.id}
+                  image={image}
+                  className={css.thumbnail}
+                  savedImageAltText={intl.formatMessage({ id: 'EditListingPhotosForm.savedImageAltText' })}
+                  onRemoveImage={() => { if (onRemoveImage) onRemoveImage(image?.id); }}
+                  aspectWidth={aspectWidth}
+                  aspectHeight={aspectHeight}
+                  variantPrefix={variantPrefix}
+                />
+              ))}
+
+              <FieldAddImage
+                id="addImage"
+                name="addImage"
+                accept="image/*"
+                label={
+                  <span className={css.chooseImageText}>
+                    <span className={css.chooseImage}>
+                      {intl.formatMessage({ id: 'EditListingPhotosForm.chooseImage' })}
+                    </span>
+                    <span className={css.imageTypes}>
+                      {intl.formatMessage({ id: 'EditListingPhotosForm.imageTypes' })}
+                    </span>
+                  </span>
+                }
+                type="file"
+                disabled={imageUploadRequested}
+                formApi={formApi}
+                onImageUploadHandler={onImageUploadHandler}
+                aspectWidth={aspectWidth}
+                aspectHeight={aspectHeight}
+                inputClassName={css.addImageInput}
+                wrapperClassName={css.addImageWrapper}
+                labelClassName={css.addImage}
+              />
+            </div>
+
+            <div className={css.aiButtonWrapper}>
+              <button
+                type="button"
+                className={css.aiButton}
+                onClick={handleGenerateListing}
+                disabled={isGenerating}
+              >
+                {isGenerating ? '✨ Generating...' : '✨ Generate with AI'}
+              </button>
+              {aiError && <p className={css.aiError}>{aiError}</p>}
+            </div>
+          </div>
 
           {showTitle && isCompatibleCurrency && (
             <FieldTextInput
