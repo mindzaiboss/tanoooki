@@ -76,7 +76,9 @@ export const FieldAddImage = props => {
           formApi.change(`addImage`, file);
           formApi.blur(`addImage`);
           onImageUploadHandler(file);
-        };
+          // Reset the input value so the same file can be selected again
+          e.target.value = '';
+    };
         const inputProps = { accept, id: name, name, onChange, type };
         return (
           <div
