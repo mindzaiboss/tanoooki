@@ -76,19 +76,11 @@ export const FieldAddImage = props => {
           formApi.change(`addImage`, file);
           formApi.blur(`addImage`);
           onImageUploadHandler(file);
-          // Reset the input value so the same file can be selected again
           e.target.value = '';
-    };
+        };
         const inputProps = { accept, id: name, name, onChange, type };
         return (
-          <div
-            className={wrapperClassName || css.addImageWrapper}
-            onClick={() => {
-              if (!fieldDisabled && inputRef.current) {
-                inputRef.current.click();
-              }
-            }}
-          >
+          <div className={wrapperClassName || css.addImageWrapper}>
             <AspectRatioWrapper width={aspectWidth} height={aspectHeight}>
               {fieldDisabled ? null : (
                 <input
@@ -97,7 +89,13 @@ export const FieldAddImage = props => {
                   className={inputClassName || css.addImageInput}
                 />
               )}
-              <label className={labelClassName || css.addImage}>{label}</label>
+              <label
+                htmlFor={name}
+                className={labelClassName || css.addImage}
+                onClick={e => e.stopPropagation()}
+              >
+                {label}
+              </label>
             </AspectRatioWrapper>
           </div>
         );
