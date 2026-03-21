@@ -563,7 +563,7 @@ const EditListingDetailsForm = props => (
               })}
               maxLength={TITLE_MAX_LENGTH}
               validate={composeValidators(required(titleRequiredMessage), maxLength60Message)}
-              autoFocus={autoFocus}
+              autoFocus={false}
             />
           )}
 
