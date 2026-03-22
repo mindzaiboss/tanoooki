@@ -54,21 +54,47 @@ module.exports = async (req, res) => {
             ...imageContent,
             {
               type: 'text',
-              text: `You are an expert in designer toys, blind boxes, collectibles, and trading cards. 
-              Analyze this image and provide listing details for a marketplace called Tanoooki.
-              
-              Return ONLY a JSON object with these fields:
-              {
-                "title": "concise product title (max 60 chars)",
-                "description": "detailed description mentioning brand, series, condition details, and anything collectors would want to know (2-3 sentences)",
-                "brand": "brand name e.g. POP MART, Medicom Toy, Sonny Angel",
-                "series": "series or collection name if identifiable",
-                "category": "one of: Blind Boxes, Figures & Collectibles, Plush, TCG & Trading Cards, Accessories",
-                "condition": "your best guess: New / Sealed or Opened / Used"
-              }
-              
-              If you cannot identify something with confidence, use null for that field.
-              Return ONLY the JSON, no other text.`,
+              text: `You are an expert authenticator and cataloguer specializing in designer toys, blind boxes, art toys, collectible figures, plush, and trading cards. You have deep knowledge of the secondary collector market.
+
+            KNOWN BRANDS (use exact capitalization):
+            POP MART (Molly, Skullpanda, Dimoo, Labubu), Medicom Toy (BE@RBRICK, UDF, Sofubi), KAWS / OriginalFake, Superplastic, Mighty Jaxx, How2Work, Toy2R (Qee), Kidrobot (Dunny, Munny), Funko (Pop!, Soda), Hot Toys, Threezero / ThreeA, Good Smile Company (Nendoroid), Bandai (Tamashii Nations), Re-Ment, 52TOYS (BeastBOX, Megabox), TOP TOY, Rolife, Finding Unicorn, Kenny Wong, Letsvan, Moetch, Pucky, Instinctoy, Kasing Lung, F.UN, ToyCity, Lucky Emma, Nanci, RealxHead, Secret Base, Marusan, Bullmark, Marmit, Max Toy Co, Shoko Nakazawa (Byron), UAMOU, Kaiju One, Blobpus, Sunguts, Goccodo, Iluilu, Fools Paradise, Wetworks, Mirock Toy, Kikkake Toy, ZCWO, OKluna, Yoyo Yeung, Sank Toys, Baby Three, Hey Dolls, BAPE, Supreme, Fragment Design, Off-White, A Bathing Ape x Medicom
+
+            CONDITION GUIDE:
+            - "New / Sealed" = factory sealed box, unopened packaging, blind box still sealed, card still in pack
+            - "Opened / Used" = opened box, figure removed from packaging, visible wear, loose figure, card out of pack
+
+            CATEGORY GUIDE:
+            - "Blind Boxes" = sealed boxes where contents are unknown (POP MART boxes, Sonny Angel blind boxes, etc.)
+            - "Figures & Collectibles" = opened figures, vinyl toys, resin art toys, statues, BE@RBRICK
+            - "Plush" = stuffed animals, plush toys, bean bags
+            - "TCG & Trading Cards" = trading card games, sports cards, sealed packs, graded cards
+            - "Accessories" = display cases, stands, bags, clothing, storage
+
+            EDITION GUIDE:
+            - "Standard Edition" = regular retail release
+            - "Limited Edition" = numbered or limited run, may say "LE" on box
+            - "Special Edition" = retailer exclusive, event exclusive, or convention release
+            - "Exclusive Edition" = platform exclusive e.g. POP MART app exclusive, SDCC exclusive
+
+            TITLE FORMAT: "[Brand] [Series] [Character/Figure name] [Edition if notable]" — max 60 chars
+            DESCRIPTION: Write 2-3 sentences a collector would want to read. Mention brand, series, character name if visible, condition details, and anything notable (chase figure, limited edition, collab, artist, etc.).
+
+            Analyze the image and return ONLY a JSON object with these fields:
+            {
+            "title": "concise product title (max 60 chars)",
+            "description": "collector-focused description (2-3 sentences)",
+            "brand": "exact brand name from known brands list above, or your best identification",
+            "series": "series or collection name if identifiable",
+            "artist": "artist or designer name if identifiable e.g. Kasing Lung, Kenny Wong, Pucky — null if unknown",
+            "edition": "one of: Standard Edition, Limited Edition, Special Edition, Exclusive Edition — null if unclear",
+            "original_packaging": "Yes if box or packaging is visible in image, No if loose with no packaging, null if unclear",
+            "condition_notes": "any visible wear, damage, yellowing, missing parts, or notable condition details — null if none visible",
+            "category": "one of: Blind Boxes, Figures & Collectibles, Plush, TCG & Trading Cards, Accessories",
+            "condition": "New / Sealed or Opened / Used"
+            }
+
+            You MUST include every field in the JSON response. If you cannot identify something with confidence, use null for that field.
+            Return ONLY the JSON, no other text.`,
             },
           ],
         },
