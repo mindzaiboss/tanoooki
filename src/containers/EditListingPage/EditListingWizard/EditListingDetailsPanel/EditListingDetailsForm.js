@@ -354,14 +354,33 @@ const EditListingDetailsForm = props => (
       const [aiError, setAiError] = useState(null);
       const [imageUploadRequested, setImageUploadRequested] = useState(false);
 
-      const onImageUploadHandler = file => {
-        console.log('onImageUploadHandler called', { file, hasOnImageUpload: typeof onImageUpload === 'function' });
-        if (file && typeof onImageUpload === 'function') {
-          setImageUploadRequested(true);
-          Promise.resolve(onImageUpload({ id: `${file.name}_${Date.now()}`, file }, listingImageConfig))
-            .then(() => setImageUploadRequested(false))
-            .catch(() => setImageUploadRequested(false));
+      const [uploadQueue, setUploadQueue] = useState([]);
+      const [isUploading, setIsUploading] = useState(false);
+
+      const onImageUploadHandler = async (files) => {
+        if (!files || files.length === 0) return;
+        const fileArray = Array.isArray(files) ? files : [files];
+        
+        setImageUploadRequested(true);
+        setIsUploading(true);
+
+        // Upload all files sequentially
+        for (const file of fileArray) {
+          if (file && typeof onImageUpload === 'function') {
+            await Promise.resolve(
+              onImageUpload({ id: `${file.name}_${Date.now()}`, file }, listingImageConfig)
+            ).catch(err => console.error('Upload error:', err));
+          }
         }
+
+        setImageUploadRequested(false);
+        setIsUploading(false);
+
+        // Auto-generate after all uploads complete
+        // Small delay to ensure CDN URLs are available
+        setTimeout(() => {
+          handleGenerateListing();
+        }, 1500);
       };
 
       const handleGenerateListing = async () => {

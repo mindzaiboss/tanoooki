@@ -71,14 +71,14 @@ export const FieldAddImage = props => {
         const { accept, input, label, disabled: fieldDisabled } = fieldprops;
         const { name, type } = input;
         const onChange = e => {
-          const file = e.target.files[0];
-          console.log('FieldAddImage onChange fired', { file, name });
-          formApi.change(`addImage`, file);
+          const files = Array.from(e.target.files);
+          console.log('FieldAddImage onChange fired', { files, name });
+          formApi.change(`addImage`, files[0]);
           formApi.blur(`addImage`);
-          onImageUploadHandler(file);
+          onImageUploadHandler(files);
           e.target.value = '';
         };
-        const inputProps = { accept, id: name, name, onChange, type };
+        const inputProps = { accept, id: name, name, onChange, type, multiple: true };
         return (
           <div className={wrapperClassName || css.addImageWrapper}>
             <AspectRatioWrapper width={aspectWidth} height={aspectHeight}>
@@ -161,20 +161,22 @@ export const EditListingPhotosForm = props => {
   const [state, setState] = useState({ imageUploadRequested: false });
   const [submittedImages, setSubmittedImages] = useState([]);
 
-  const onImageUploadHandler = file => {
-    const { listingImageConfig, onImageUpload } = props;
-    if (file) {
-      setState({ imageUploadRequested: true });
+  const onImageUploadHandler = async (files) => {
+  const { listingImageConfig, onImageUpload } = props;
+  const fileArray = Array.isArray(files) ? files : [files];
+  if (fileArray.length === 0) return;
 
-      onImageUpload({ id: `${file.name}_${Date.now()}`, file }, listingImageConfig)
-        .then(() => {
-          setState({ imageUploadRequested: false });
-        })
-        .catch(() => {
-          setState({ imageUploadRequested: false });
-        });
+  setState({ imageUploadRequested: true });
+
+  for (const file of fileArray) {
+    if (file) {
+      await onImageUpload({ id: `${file.name}_${Date.now()}`, file }, listingImageConfig)
+        .catch(err => console.error('Upload error:', err));
     }
-  };
+  }
+
+  setState({ imageUploadRequested: false });
+};
   const intl = useIntl();
 
   return (
