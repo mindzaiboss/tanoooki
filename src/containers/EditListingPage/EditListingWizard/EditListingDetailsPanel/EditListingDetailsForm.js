@@ -400,7 +400,7 @@ const EditListingDetailsForm = props => (
             if (series) formApi.change('pub_series', series);
             if (artist) formApi.change('pub_artist', artist);
             if (condition_notes) formApi.change('pub_condition_notes', condition_notes);
-            if (original_packaging) formApi.change('pub_original_packaging_included', original_packaging === 'Yes' ? 'yes' : 'no');
+            if (original_packaging) formApi.change('pub_original_packaging_included', original_packaging === 'Yes' ? 'yes-original-packaging' : 'no-original-packaging');
             if (condition) {
               if (condition === 'New / Sealed') formApi.change('pub_itemcondition', 'new-sealed');
               else if (condition === 'Opened / Used') formApi.change('pub_itemcondition', 'opened-used');
