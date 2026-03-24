@@ -423,13 +423,14 @@ useEffect(() => {
           const data = await res.json();
 
           if (data.success && data.listing) {
-            const { title, description, brand, series, artist, condition, edition, original_packaging, condition_notes } = data.listing;
+            const { title, description, brand, series, artist, condition, edition, original_packaging, condition_notes, barcode } = data.listing;
             if (title) formApi.change('title', title);
             if (description) formApi.change('description', description);
             if (brand) formApi.change('pub_brand', brand);
             if (series) formApi.change('pub_series', series);
             if (artist) formApi.change('pub_artist', artist);
             if (condition_notes) formApi.change('pub_condition_notes', condition_notes);
+            if (barcode) formApi.change('pub_barcode', barcode);
             if (original_packaging) formApi.change('pub_original_packaging_included', original_packaging === 'Yes' ? 'yes-original-packaging' : 'no-original-packaging');
             if (condition) {
               if (condition === 'New / Sealed') formApi.change('pub_itemcondition', 'new-sealed');

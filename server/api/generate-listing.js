@@ -90,7 +90,8 @@ module.exports = async (req, res) => {
             "original_packaging": "Yes if box or packaging is visible in image, No if loose with no packaging, null if unclear",
             "condition_notes": "any visible wear, damage, yellowing, missing parts, or notable condition details — null if none visible",
             "category": "one of: Blind Boxes, Figures & Collectibles, Plush, TCG & Trading Cards, Accessories",
-            "condition": "New / Sealed or Opened / Used"
+            "condition": "New / Sealed or Opened / Used",
+            "barcode": "the UPC, EAN, or GTIN number printed beneath the barcode on the packaging — null if not visible or not present"
             }
 
             You MUST include every field in the JSON response. If you cannot identify something with confidence, use null for that field.
