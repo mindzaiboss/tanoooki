@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Field, Form as FinalForm } from 'react-final-form';
 import arrayMutators from 'final-form-arrays';
 import classNames from 'classnames';
+import { BrowserMultiFormatReader } from '@zxing/library';
 
 // Import util modules
 import { FormattedMessage, useIntl } from '../../../../util/reactIntl';
@@ -247,11 +248,12 @@ const FieldSelectCategory = props => {
 
 // Add collect data for listing fields (both publicData and privateData) based on configuration
 const AddListingFields = props => {
-  const { listingType, listingFieldsConfig, selectedCategories, formId, intl } = props;
+  const { listingType, listingFieldsConfig, selectedCategories, formId, intl, excludeKeys = [] } = props;
   const targetCategoryIds = Object.values(selectedCategories);
 
   const fields = listingFieldsConfig.reduce((pickedFields, fieldConfig) => {
     const { key, schemaType, scope } = fieldConfig || {};
+    if (excludeKeys.includes(key)) return pickedFields;
     const namespacedKey = scope === 'public' ? `pub_${key}` : `priv_${key}`;
 
     const isKnownSchemaType = EXTENDED_DATA_SCHEMA_TYPES.includes(schemaType);
@@ -357,6 +359,17 @@ const EditListingDetailsForm = props => (
       const [uploadQueue, setUploadQueue] = useState([]);
       const [isUploading, setIsUploading] = useState(false);
       const [shouldAutoGenerate, setShouldAutoGenerate] = useState(false);
+      const [detectedBarcode, setDetectedBarcode] = useState(null);
+
+useEffect(() => {
+  console.log('detectedBarcode useEffect fired:', detectedBarcode);
+  console.log('formApi:', !!formApi);
+  if (detectedBarcode) {
+    formApi.change('pub_barcode_UPC', detectedBarcode);
+    console.log('formApi.change called with:', detectedBarcode);
+    console.log('pub_barcode value after change:', formApi.getState()?.values?.pub_barcode);
+  }
+}, [detectedBarcode]);
 
 useEffect(() => {
   if (shouldAutoGenerate && images && images.length > 0) {
@@ -379,6 +392,25 @@ useEffect(() => {
         
         setImageUploadRequested(true);
         setIsUploading(true);
+
+        // Attempt barcode scan on each file before uploading
+        const codeReader = new BrowserMultiFormatReader();
+        for (const file of fileArray) {
+          try {
+            const imageUrl = URL.createObjectURL(file);
+            const result = await codeReader.decodeFromImageUrl(imageUrl);
+            URL.revokeObjectURL(imageUrl);
+            if (result?.text) {
+              console.log('Barcode detected:', result.text);
+              setDetectedBarcode(result.text);
+              break;
+            } // Stop after first barcode found
+            
+          } catch (err) {
+            // No barcode found in this image, continue
+            console.log('No barcode found in image:', file.name);
+          }
+        }
 
         // Upload all files sequentially
         for (const file of fileArray) {
@@ -430,7 +462,7 @@ useEffect(() => {
             if (series) formApi.change('pub_series', series);
             if (artist) formApi.change('pub_artist', artist);
             if (condition_notes) formApi.change('pub_condition_notes', condition_notes);
-            if (barcode) formApi.change('pub_barcode', barcode);
+            if (barcode) formApi.change('pub_barcode_UPC', barcode);
             if (original_packaging) formApi.change('pub_original_packaging_included', original_packaging === 'Yes' ? 'yes-original-packaging' : 'no-original-packaging');
             if (condition) {
               if (condition === 'New / Sealed') formApi.change('pub_itemcondition', 'new-sealed');
@@ -630,15 +662,35 @@ useEffect(() => {
             />
           )}
 
-          {showListingFields && isCompatibleCurrency && (
-            <AddListingFields
-              listingType={listingType}
-              listingFieldsConfig={listingFieldsConfig}
-              selectedCategories={pickSelectedCategories(values)}
-              formId={formId}
-              intl={intl}
-            />
-          )}
+          {showListingFields && isCompatibleCurrency && (() => {
+            const barcodeConfig = listingFieldsConfig.find(f => f.key === 'barcode_UPC');
+            console.log('barcodeConfig:', barcodeConfig);
+            console.log('listingFieldsConfig keys:', listingFieldsConfig.map(f => f.key));
+            const barcodeLabel = barcodeConfig?.saveConfig?.label || barcodeConfig?.label || 'Barcode / UPC';
+            const barcodePlaceholder = barcodeConfig?.saveConfig?.placeholderMessage || '';
+            return (
+              <>
+                <AddListingFields
+                  listingType={listingType}
+                  listingFieldsConfig={listingFieldsConfig}
+                  selectedCategories={pickSelectedCategories(values)}
+                  formId={formId}
+                  intl={intl}
+                  excludeKeys={['barcode_UPC']}
+                />
+                {barcodeConfig && (
+                  <FieldTextInput
+                    id={`${formId}.pub_barcode`}
+                    name="pub_barcode_UPC"
+                    type="text"
+                    label={barcodeLabel}
+                    placeholder={barcodePlaceholder}
+                    className={css.customField}
+                  />
+                )}
+              </>
+            );
+          })()}
 
           {!isCompatibleCurrency && listingType && (
             <p className={css.error}>
