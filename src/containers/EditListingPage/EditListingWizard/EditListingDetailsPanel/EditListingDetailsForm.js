@@ -423,7 +423,7 @@ useEffect(() => {
           const data = await res.json();
 
           if (data.success && data.listing) {
-            const { title, description, brand, series, artist, condition, edition, original_packaging, condition_notes, barcode } = data.listing;
+            const { title, description, brand, series, artist, condition, edition, original_packaging, condition_notes, barcode, category } = data.listing;
             if (title) formApi.change('title', title);
             if (description) formApi.change('description', description);
             if (brand) formApi.change('pub_brand', brand);
@@ -445,6 +445,17 @@ useEffect(() => {
               };
               const mapped = editionMap[edition] || edition.toLowerCase().replace(/\s+/g, '-');
               formApi.change('pub_edition', mapped);
+            }
+            if (category) {
+              const categoryMap = {
+                'Blind Boxes': 'blind-boxes',
+                'Figures & Collectibles': 'figures-collectibles',
+                'Plush': 'plush',
+                'TCG & Trading Cards': 'tcg-trading-cards',
+                'Accessories': 'accessories',
+              };
+              const mappedCategory = categoryMap[category];
+              if (mappedCategory) formApi.change('categoryLevel1', mappedCategory);
             }
           } else {
             setAiError('Could not generate listing details. Please try again.');
