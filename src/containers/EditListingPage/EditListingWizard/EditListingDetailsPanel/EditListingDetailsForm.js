@@ -356,6 +356,22 @@ const EditListingDetailsForm = props => (
 
       const [uploadQueue, setUploadQueue] = useState([]);
       const [isUploading, setIsUploading] = useState(false);
+      const [shouldAutoGenerate, setShouldAutoGenerate] = useState(false);
+
+useEffect(() => {
+  if (shouldAutoGenerate && images && images.length > 0) {
+    // Check all images have CDN URLs (are fully uploaded)
+    const allUploaded = images.every(image => 
+      image.attributes?.variants?.['listing-card']?.url ||
+      image.attributes?.variants?.['scaled-small']?.url ||
+      image.imageUrl
+    );
+    if (allUploaded) {
+      setShouldAutoGenerate(false);
+      handleGenerateListing();
+    }
+  }
+}, [images, shouldAutoGenerate]);
 
       const onImageUploadHandler = async (files) => {
         if (!files || files.length === 0) return;
@@ -375,12 +391,7 @@ const EditListingDetailsForm = props => (
 
         setImageUploadRequested(false);
         setIsUploading(false);
-
-        // Auto-generate after all uploads complete
-        // Small delay to ensure CDN URLs are available
-        setTimeout(() => {
-          handleGenerateListing();
-        }, 1500);
+        setShouldAutoGenerate(true);
       };
 
       const handleGenerateListing = async () => {
