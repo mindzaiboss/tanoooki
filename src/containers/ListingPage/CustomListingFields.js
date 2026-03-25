@@ -52,7 +52,8 @@ const CustomListingFields = props => {
     const isTargetListingType = isFieldForListingType(listingType, config);
     const isTargetCategory = isFieldForCategory(config);
 
-    const { isDetail, label } = showConfig;
+    const { isDetail, label: rawLabel } = showConfig;
+    const label = rawLabel?.replace(/ \((required|optional)\)$/i, '') ?? rawLabel;
     const publicDataValue = publicData[key];
     const metadataValue = metadata[key];
     const value = typeof publicDataValue != null ? publicDataValue : metadataValue;

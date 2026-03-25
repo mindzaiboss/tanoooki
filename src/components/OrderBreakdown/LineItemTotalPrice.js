@@ -3,6 +3,7 @@ import { FormattedMessage, intlShape } from '../../util/reactIntl';
 import { formatMoney } from '../../util/currency';
 import { propTypes } from '../../util/types';
 import { resolveLatestProcessName, getProcess } from '../../transactions/transaction';
+import useCurrencyConversion, { formatConvertedAmount } from '../../util/useCurrencyConversion';
 
 import css from './OrderBreakdown.module.css';
 
@@ -44,6 +45,11 @@ const LineItemTotalPrice = props => {
     : transaction.attributes.payinTotal;
   const formattedTotalPrice = formatMoney(intl, totalPrice);
 
+  const conversion = useCurrencyConversion(totalPrice);
+  const conversionHint = conversion
+    ? `Approximately ${formatConvertedAmount(conversion.convertedAmount, conversion.userCurrency)} ${conversion.userCurrency}`
+    : null;
+
   return (
     <>
       <hr className={css.totalDivider} />
@@ -51,6 +57,9 @@ const LineItemTotalPrice = props => {
         <div className={css.totalLabel}>{totalLabel}</div>
         <div className={css.totalPrice}>{formattedTotalPrice}</div>
       </div>
+      {conversionHint && (
+        <div className={css.conversionHint}>{conversionHint}</div>
+      )}
     </>
   );
 };

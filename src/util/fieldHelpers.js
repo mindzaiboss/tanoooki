@@ -146,7 +146,8 @@ export const pickCustomFieldProps = (extendedData, fieldConfigs, entityTypeKey, 
   const { publicData, metadata, protectedData } = extendedData;
   return fieldConfigs?.reduce((pickedElements, config) => {
     const { key, enumOptions, schemaType, scope = 'public', showConfig } = config;
-    const { label, unselectedOptions: showUnselectedOptions } = showConfig || {};
+    const { label: rawLabel, unselectedOptions: showUnselectedOptions } = showConfig || {};
+    const label = rawLabel?.replace(/ \((required|optional)\)$/i, '') ?? rawLabel;
     const isTargetEntityType = isCustomFieldRelevantForEntityType(
       entityTypeKey,
       publicData,

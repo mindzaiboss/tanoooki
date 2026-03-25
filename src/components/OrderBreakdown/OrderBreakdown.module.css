@@ -125,6 +125,14 @@
   composes: marketplaceSmallFontStyles from global;
 }
 
+.conversionHint {
+  composes: marketplaceTinyFontStyles from global;
+  color: var(--colorGrey400);
+  text-align: right;
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
 .feeInfo {
   composes: marketplaceTinyFontStyles from global;
   flex-shrink: 0;

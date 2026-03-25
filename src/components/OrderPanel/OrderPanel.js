@@ -23,6 +23,7 @@ import {
   LISTING_STATE_PUBLISHED,
 } from '../../util/types';
 import { formatMoney } from '../../util/currency';
+import useCurrencyConversion, { formatConvertedAmount } from '../../util/useCurrencyConversion';
 import { createSlug, parse, stringify } from '../../util/urlHelpers';
 import { userDisplayNameAsString } from '../../util/data';
 import {
@@ -135,67 +136,6 @@ const handleSubmit = (isOwnListing, isClosed, isDirectSubmit, onSubmit, history,
 
 const dateFormattingOptions = { month: 'short', day: 'numeric', weekday: 'short' };
 
-// Module-level cache so repeated mounts don't re-fetch
-let _geoCache = null;
-let _fxCache = null;
-
-const useCurrencyConversion = price => {
-  const [convertedText, setConvertedText] = useState(null);
-
-  useEffect(() => {
-    if (!price?.amount || !price?.currency) return;
-    let cancelled = false;
-
-    const run = async () => {
-      try {
-        if (!_geoCache) {
-          const res = await fetch('/api/geolocate');
-          if (!res.ok) return;
-          _geoCache = await res.json();
-        }
-        if (!_fxCache) {
-          const res = await fetch('/api/fx-rates');
-          if (!res.ok) return;
-          _fxCache = await res.json();
-        }
-        if (cancelled) return;
-
-        const userCurrency = _geoCache?.currency;
-        if (!userCurrency || userCurrency === price.currency) return;
-
-        const rates = _fxCache?.rates;
-        if (!rates?.[userCurrency]) return;
-
-        const amountInMajor = price.amount / 100;
-        let converted;
-        if (price.currency === 'USD') {
-          converted = amountInMajor * rates[userCurrency];
-        } else if (rates[price.currency]) {
-          converted = (amountInMajor / rates[price.currency]) * rates[userCurrency];
-        } else {
-          return;
-        }
-
-        const formatted = new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: userCurrency,
-          currencyDisplay: 'narrowSymbol',
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }).format(converted);
-
-        setConvertedText(`(~${formatted} ${userCurrency})`);
-      } catch (_) {
-        // silently ignore — this is a convenience hint only
-      }
-    };
-
-    run();
-    return () => { cancelled = true; };
-  }, [price?.amount, price?.currency]);
-
-  return convertedText;
-};
 
 const PriceMaybe = props => {
   const {
@@ -382,7 +322,10 @@ const OrderPanel = props => {
   const lineItemUnitType = lineItemUnitTypeMaybe || `line-item/${unitType}`;
 
   const price = listing?.attributes?.price;
-  const currencyHint = useCurrencyConversion(price);
+  const priceConversion = useCurrencyConversion(price);
+  const currencyHint = priceConversion
+    ? `(~${formatConvertedAmount(priceConversion.convertedAmount, priceConversion.userCurrency)} ${priceConversion.userCurrency})`
+    : null;
   const isInquiry = isInquiryProcess(processName);
   const isBooking = isBookingProcess(processName);
   const isPurchase = isPurchaseProcess(processName);
