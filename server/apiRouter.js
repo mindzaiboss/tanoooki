@@ -8,6 +8,9 @@
 
 const generateListing = require('./api/generate-listing');
 
+const fxRates = require('./api/fx-rates');
+const geolocate = require('./api/geolocate');
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const { deserialize } = require('./api-util/sdk');
@@ -62,6 +65,8 @@ router.post('/initiate-privileged', initiatePrivileged);
 router.post('/transition-privileged', transitionPrivileged);
 router.post('/delete-account', deleteAccount);
 router.post('/generate-listing', generateListing);
+router.get('/fx-rates', fxRates);
+router.get('/geolocate', geolocate);
 
 // Create user with identity provider (e.g. Facebook or Google)
 // This endpoint is called to create a new user after user has confirmed

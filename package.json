@@ -26,7 +26,9 @@
     "express-enforces-ssl": "^1.1.0",
     "final-form": "4.20.10",
     "final-form-arrays": "3.1.0",
+    "geoip-lite": "1.4.10",
     "helmet": "^8.1.0",
+    "http-proxy-middleware": "^3.0.5",
     "jose": "5.9.6",
     "lodash": "4.17.23",
     "mapbox-gl-multitouch": "^1.0.3",
@@ -119,6 +121,7 @@
     ]
   },
   "proxy": "http://localhost:3500",
+  "setupProxy": "./src/setupProxy.js",
   "engines": {
     "node": "22.x"
   },
