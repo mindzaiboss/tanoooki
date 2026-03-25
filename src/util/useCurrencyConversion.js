@@ -18,18 +18,27 @@ const useCurrencyConversion = price => {
     if (!price?.amount || !price?.currency) return;
     let cancelled = false;
 
+    const fetchWithTimeout = (url, ms = 3000) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), ms);
+      return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+    };
+
     const run = async () => {
       try {
-        if (!_geoCache) {
-          const res = await fetch('/api/geolocate');
-          if (!res.ok) return;
-          _geoCache = await res.json();
-        }
-        if (!_fxCache) {
-          const res = await fetch('/api/fx-rates');
-          if (!res.ok) return;
-          _fxCache = await res.json();
-        }
+        const [geoRes, fxRes] = await Promise.all([
+      _geoCache ? Promise.resolve(null) : fetchWithTimeout('/api/geolocate'),
+      _fxCache ? Promise.resolve(null) : fetchWithTimeout('/api/fx-rates'),
+    ]);
+
+    if (geoRes) {
+      if (!geoRes.ok) return;
+      _geoCache = await geoRes.json();
+    }
+    if (fxRes) {
+      if (!fxRes.ok) return;
+      _fxCache = await fxRes.json();
+    }
         if (cancelled) return;
 
         const userCurrency = _geoCache?.currency;
