@@ -76,19 +76,40 @@
   }
 }
 .imagesSection {
-  margin-bottom: 24px;
+  margin-bottom: 16px;
+}
 
-  @media (--viewportMedium) {
-    margin-bottom: 32px;
+/* Horizontal scrolling photo strip */
+.photoStrip {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--colorGrey200) transparent;
+
+  &::-webkit-scrollbar {
+    height: 4px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: var(--colorGrey200);
+    border-radius: 2px;
   }
 }
 
-.imagesFieldArray {
+.photoThumb {
+  position: relative;
   flex-shrink: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
-  margin: 0 0 16px 0;
+  width: 88px;
+  height: 88px;
+  overflow: hidden;
+  border-radius: 8px;
 }
 
 .thumbnail {
@@ -96,70 +117,62 @@
   background-color: var(--colorGrey50);
 }
 
-.addImageWrapper {
-  float: left;
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-
-  &::after {
-    content: '.';
-    visibility: hidden;
-    display: block;
-    height: 0;
-    clear: both;
-  }
+.coverBadge {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.52);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 2;
+  white-space: nowrap;
 }
 
-.addImage {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  right: 0;
+/* Camera add-photo button */
+.cameraButtonWrapper {
+  flex-shrink: 0;
+  width: 88px;
+}
+
+.cameraButton {
+  display: flex !important;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-top: 0;
-  background-color: var(--colorWhite);
-
-  @media (--viewportLarge) {
-    background-color: var(--colorGrey50);
-  }
-
-  border-style: dashed;
-  border-color: var(--colorGrey100);
-  border-width: 2px;
-  border-radius: 2px;
+  border: 1.5px dashed var(--colorGrey300);
+  border-radius: 8px;
+  background-color: var(--colorGrey50);
   cursor: pointer;
-  transition: var(--transitionStyleButton);
+  color: var(--colorGrey500);
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
 
   &:hover {
-    border-color: var(--colorGrey300);
+    border-color: var(--colorGrey500);
+    background-color: var(--colorGrey100);
+    color: var(--colorGrey700);
   }
 }
 
-.chooseImageText {
+.cameraButtonInner {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 4px;
 }
 
-.chooseImage {
-  composes: h4 from global;
-  color: var(--colorGrey700);
-  font-weight: var(--fontWeightSemiBold);
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
-.imageTypes {
-  composes: marketplaceTinyFontStyles from global;
-  color: var(--colorGrey600);
-  margin-top: 0;
-  margin-bottom: 0;
+.photoCount {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .addImageInput {
@@ -204,4 +217,26 @@
   color: #EE3A43;
   font-size: 14px;
   margin-top: 8px;
+}
+
+.sectionDivider {
+  border: none;
+  border-top: 1px solid var(--colorGrey100);
+  margin: 0 0 24px 0;
+
+  @media (--viewportMedium) {
+    margin: 0 0 32px 0;
+  }
+}
+
+.fieldHelpText {
+  composes: textSmall from global;
+  color: var(--colorGrey600);
+  margin-top: -16px;
+  margin-bottom: 20px;
+
+  @media (--viewportMedium) {
+    margin-top: -24px;
+    margin-bottom: 24px;
+  }
 }

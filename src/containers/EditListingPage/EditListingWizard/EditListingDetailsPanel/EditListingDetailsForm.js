@@ -31,6 +31,7 @@ import ListingImage from '../EditListingPhotosPanel/ListingImage';
 import css from './EditListingDetailsForm.module.css';
 
 const TITLE_MAX_LENGTH = 60;
+const MAX_IMAGES = 10;
 
 // Show various error messages
 const ErrorMessage = props => {
@@ -248,7 +249,7 @@ const FieldSelectCategory = props => {
 
 // Add collect data for listing fields (both publicData and privateData) based on configuration
 const AddListingFields = props => {
-  const { listingType, listingFieldsConfig, selectedCategories, formId, intl, excludeKeys = [] } = props;
+  const { listingType, listingFieldsConfig, selectedCategories, formId, intl, excludeKeys = [], fieldHelpTexts = {} } = props;
   const targetCategoryIds = Object.values(selectedCategories);
 
   const fields = listingFieldsConfig.reduce((pickedFields, fieldConfig) => {
@@ -261,20 +262,24 @@ const AddListingFields = props => {
     const isTargetListingType = isFieldForListingType(listingType, fieldConfig);
     const isTargetCategory = isFieldForCategory(targetCategoryIds, fieldConfig);
 
-    return isKnownSchemaType && isProviderScope && isTargetListingType && isTargetCategory
-      ? [
-        ...pickedFields,
-        <CustomExtendedDataField
-          key={namespacedKey}
-          name={namespacedKey}
-          fieldConfig={fieldConfig}
-          defaultRequiredMessage={intl.formatMessage({
-            id: 'EditListingDetailsForm.defaultRequiredMessage',
-          })}
-          formId={formId}
-        />,
-      ]
-      : pickedFields;
+    if (!isKnownSchemaType || !isProviderScope || !isTargetListingType || !isTargetCategory) {
+      return pickedFields;
+    }
+
+    const helpTextNode = fieldHelpTexts[key] || null;
+    return [
+      ...pickedFields,
+      <CustomExtendedDataField
+        key={namespacedKey}
+        name={namespacedKey}
+        fieldConfig={fieldConfig}
+        defaultRequiredMessage={intl.formatMessage({
+          id: 'EditListingDetailsForm.defaultRequiredMessage',
+        })}
+        formId={formId}
+      />,
+      ...(helpTextNode ? [<div key={`${namespacedKey}-help`}>{helpTextNode}</div>] : []),
+    ];
   }, []);
 
   return <>{fields}</>;
@@ -350,7 +355,7 @@ const EditListingDetailsForm = props => (
 
       const intl = useIntl();
       const { listingType, transactionProcessAlias, unitType } = values;
-      const { aspectWidth = 1, aspectHeight = 1, variantPrefix } = listingImageConfig || {};
+      const { variantPrefix } = listingImageConfig || {};
       const [allCategoriesChosen, setAllCategoriesChosen] = useState(false);
       const [isGenerating, setIsGenerating] = useState(false);
       const [aiError, setAiError] = useState(null);
@@ -563,44 +568,44 @@ useEffect(() => {
           />
 
           <div className={css.imagesSection}>
-            <div className={css.imagesFieldArray}>
-              {(images || []).map(image => (
-                <ListingImage
-                  key={image?.id?.uuid || image?.id}
-                  image={image}
-                  className={css.thumbnail}
-                  savedImageAltText={intl.formatMessage({ id: 'EditListingPhotosForm.savedImageAltText' })}
-                  onRemoveImage={() => { if (onRemoveImage) onRemoveImage(image?.id); }}
-                  aspectWidth={aspectWidth}
-                  aspectHeight={aspectHeight}
-                  variantPrefix={variantPrefix}
-                />
-              ))}
-
+            <div className={css.photoStrip}>
               <FieldAddImage
                 id="addImage"
                 name="addImage"
                 accept="image/*"
                 label={
-                  <span className={css.chooseImageText}>
-                    <span className={css.chooseImage}>
-                      {intl.formatMessage({ id: 'EditListingPhotosForm.chooseImage' })}
-                    </span>
-                    <span className={css.imageTypes}>
-                      {intl.formatMessage({ id: 'EditListingPhotosForm.imageTypes' })}
-                    </span>
+                  <span className={css.cameraButtonInner}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                      <circle cx="12" cy="13" r="4" />
+                    </svg>
+                    <span className={css.photoCount}>{(images || []).length}/{MAX_IMAGES}</span>
                   </span>
                 }
                 type="file"
-                disabled={imageUploadRequested}
+                disabled={imageUploadRequested || (images || []).length >= MAX_IMAGES}
                 formApi={formApi}
                 onImageUploadHandler={onImageUploadHandler}
-                aspectWidth={aspectWidth}
-                aspectHeight={aspectHeight}
+                aspectWidth={1}
+                aspectHeight={1}
                 inputClassName={css.addImageInput}
-                wrapperClassName={css.addImageWrapper}
-                labelClassName={css.addImage}
+                wrapperClassName={css.cameraButtonWrapper}
+                labelClassName={css.cameraButton}
               />
+              {(images || []).map((image, index) => (
+                <div key={image?.id?.uuid || image?.id} className={css.photoThumb}>
+                  {index === 0 && <span className={css.coverBadge}>Cover</span>}
+                  <ListingImage
+                    image={image}
+                    className={css.thumbnail}
+                    savedImageAltText={intl.formatMessage({ id: 'EditListingPhotosForm.savedImageAltText' })}
+                    onRemoveImage={() => { if (onRemoveImage) onRemoveImage(image?.id); }}
+                    aspectWidth={1}
+                    aspectHeight={1}
+                    variantPrefix={variantPrefix}
+                  />
+                </div>
+              ))}
             </div>
 
             <div className={css.aiButtonWrapper}>
@@ -616,6 +621,8 @@ useEffect(() => {
             </div>
           </div>
 
+          <hr className={css.sectionDivider} />
+
           {showCategories && isCompatibleCurrency && (
             <FieldSelectCategory
               values={values}
@@ -627,6 +634,8 @@ useEffect(() => {
               setAllCategoriesChosen={setAllCategoriesChosen}
             />
           )}
+
+          <hr className={css.sectionDivider} />
 
           {showTitle && isCompatibleCurrency && (
             <FieldTextInput
@@ -662,6 +671,8 @@ useEffect(() => {
             />
           )}
 
+          <hr className={css.sectionDivider} />
+
           {showListingFields && isCompatibleCurrency && (() => {
             const barcodeConfig = listingFieldsConfig.find(f => f.key === 'barcode_UPC');
             console.log('barcodeConfig:', barcodeConfig);
@@ -677,6 +688,14 @@ useEffect(() => {
                   formId={formId}
                   intl={intl}
                   excludeKeys={['barcode_UPC']}
+                  fieldHelpTexts={{
+                    itemcondition: (
+                      <p className={css.fieldHelpText}>
+                        <strong>New / Sealed:</strong>{' '}The item is in its original sealed packaging, never opened.<br />
+                        <strong>Opened / Used:</strong>{' '}The item&apos;s original packaging has been altered. The item is USED or a confirmed figure where a blind box was opened to identify.
+                      </p>
+                    ),
+                  }}
                 />
                 {barcodeConfig && (
                   <FieldTextInput
@@ -685,6 +704,7 @@ useEffect(() => {
                     type="text"
                     label={barcodeLabel}
                     placeholder={barcodePlaceholder}
+                    helpText="Enter the UPC, EAN, or GTIN barcode number found on the product's packaging. Example: 012345678901. This helps buyers find and verify the exact product."
                     className={css.customField}
                   />
                 )}
