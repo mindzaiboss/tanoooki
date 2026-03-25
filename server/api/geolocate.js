@@ -32,8 +32,9 @@ module.exports = (req, res) => {
     const geo = geoip.lookup(ip);
     console.log('Geo result:', geo);
 
-    const countryCode = geo?.country || 'US';
-    const currency = COUNTRY_CURRENCY_MAP[countryCode] || 'USD';
+    // Temporary test - change US to CA
+    const countryCode = geo?.country || 'JP';
+    const currency = COUNTRY_CURRENCY_MAP[countryCode] || 'JPY';
 
     res.json({
       success: true,

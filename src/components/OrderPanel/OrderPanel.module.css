@@ -75,6 +75,19 @@
   color: var(--marketplaceColor);
 }
 
+.priceCurrencyCode {
+  font-weight: var(--fontWeightBold);
+  color: var(--marketplaceColor);
+}
+
+.currencyHint {
+  display: inline;
+  font-size: 0.82em;
+  font-weight: var(--fontWeightRegular);
+  color: var(--colorGrey400);
+  margin-left: 6px;
+}
+
 .author {
   composes: p from global;
   margin: 0px 24px 32px 24px;
