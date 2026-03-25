@@ -618,6 +618,7 @@ useEffect(() => {
                 {isGenerating ? '✨ Generating...' : '✨ Generate with AI'}
               </button>
               {aiError && <p className={css.aiError}>{aiError}</p>}
+              <p className={css.aiDisclaimer}>AI can make mistakes. Please verify accuracy.</p>
             </div>
           </div>
 
@@ -730,6 +731,7 @@ useEffect(() => {
           >
             {saveActionMsg}
           </Button>
+          <p className={css.submitDisclaimer}>AI can make mistakes. Please verify the accuracy of the AI-generated text and data. Accurate listing information is your responsibility.</p>
         </Form>
       );
     }}

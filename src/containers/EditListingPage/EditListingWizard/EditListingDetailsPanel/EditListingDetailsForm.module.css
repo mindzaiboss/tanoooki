@@ -22,7 +22,7 @@
 }
 
 .formMargins {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 
   @media (--viewportMedium) {
     margin-bottom: 32px;
@@ -65,18 +65,22 @@
 }
 
 .submitButton {
-  margin-top: auto;
+  margin-top: 32px;
   margin-bottom: 24px;
   flex-shrink: 0;
 
   @media (--viewportLarge) {
     display: inline-block;
     width: 241px;
-    margin-top: 100px;
+    margin-top: 40px;
   }
 }
 .imagesSection {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+
+  @media (--viewportMedium) {
+    margin-bottom: 16px;
+  }
 }
 
 /* Horizontal scrolling photo strip */
@@ -186,8 +190,22 @@
   z-index: 1;
 }
 
+.customField {
+  margin-bottom: 28px;
+
+  @media (--viewportMedium) {
+    margin-bottom: 32px;
+  }
+}
+
 .aiButtonWrapper {
-  margin-bottom: 16px;
+  margin-top: 16px;
+  margin-bottom: 20px;
+
+  @media (--viewportMedium) {
+    margin-top: 16px;
+    margin-bottom: 16px;
+  }
 }
 
 .aiButton {
@@ -219,6 +237,20 @@
   margin-top: 8px;
 }
 
+.aiDisclaimer {
+  font-size: 12px;
+  color: var(--colorGrey400);
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
+.submitDisclaimer {
+  font-size: 12px;
+  color: var(--colorGrey400);
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
 .sectionDivider {
   border: none;
   border-top: 1px solid var(--colorGrey100);
@@ -232,8 +264,8 @@
 .fieldHelpText {
   composes: textSmall from global;
   color: var(--colorGrey600);
-  margin-top: -16px;
-  margin-bottom: 20px;
+  margin-top: -8px;
+  margin-bottom: 28px;
 
   @media (--viewportMedium) {
     margin-top: -24px;
