@@ -1300,9 +1300,11 @@ const mergeUserConfig = (hostedConfig, defaultConfigs) => {
   const userTypes = shouldMerge
     ? union(hostedUserTypes, defaultUserTypes, 'userType')
     : hostedUserTypes;
-  const userFields = shouldMerge
-    ? union(hostedUserFields, defaultUserFields, 'key')
-    : hostedUserFields;
+  // Always merge in private fields from local config (can't be configured in Console)
+const privateDefaultFields = defaultUserFields.filter(f => f.scope === 'private');
+const userFields = shouldMerge
+  ? union(hostedUserFields, defaultUserFields, 'key')
+  : union(hostedUserFields, privateDefaultFields, 'key');
 
   // To include user type validation (if you have user types in your default configuration),
   // pass userTypes to the validUserFields function as well:

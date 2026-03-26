@@ -1,5 +1,10 @@
 {
   "AddressLinkMaybe.viewOnGoogleMaps": "View on Google Maps",
+  "AddressesPage.heading": "Your Addresses",
+  "AddressesPage.subtitle": "Manage your shipping and delivery addresses. This information is private and only used for shipping purposes.",
+  "AddressesPage.title": "Addresses",
+  "AddressesPage.saveChanges": "Save changes",
+  "AddressesPage.updateFailed": "Saving address information failed.",
   "AuthenticationPage.confirmSignupInfoText": "Please check that your information is correct.",
   "AuthenticationPage.confirmSignupWithIdpTitle": "Sign up with {idp}",
   "AuthenticationPage.fixEmail": "Is there an error in your email? {fixEmailLink}.",
@@ -530,6 +535,7 @@
   "LandingPage.schemaTitle": "{marketplaceName}",
   "LayoutSideNavigation.screenreader.accountNavigation": "Account settings navigation",
   "LayoutWrapperAccountSettingsSideNav.contactDetailsTabTitle": "Contact details",
+  "LayoutWrapperAccountSettingsSideNav.addressesTabTitle": "Addresses",
   "LayoutWrapperAccountSettingsSideNav.manageAccountTabTitle": "Manage account",
   "LayoutWrapperAccountSettingsSideNav.passwordTabTitle": "Password",
   "LayoutWrapperAccountSettingsSideNav.paymentMethodsTabTitle": "Payment methods",

@@ -36,124 +36,143 @@
  *   (optional)                       data is relevant and should be added.
  */
 export const userFields = [
+  
   {
-    key: 'cuisine',
-    scope: 'public',
+    key: 'country',
+    scope: 'private',
     schemaType: 'enum',
     enumOptions: [
-      { option: 'italian', label: 'Italian' },
-      { option: 'chinese', label: 'Chinese' },
-      { option: 'thai', label: 'Thai' },
+      { option: 'US', label: 'United States' },
+      { option: 'CA', label: 'Canada' },
+      { option: 'GB', label: 'United Kingdom' },
+      { option: 'AU', label: 'Australia' },
+      { option: 'AT', label: 'Austria' },
+      { option: 'BE', label: 'Belgium' },
+      { option: 'CN', label: 'China' },
+      { option: 'CY', label: 'Cyprus' },
+      { option: 'EE', label: 'Estonia' },
+      { option: 'FI', label: 'Finland' },
+      { option: 'FR', label: 'France' },
+      { option: 'DE', label: 'Germany' },
+      { option: 'GR', label: 'Greece' },
+      { option: 'HK', label: 'Hong Kong' },
+      { option: 'IE', label: 'Ireland' },
+      { option: 'IT', label: 'Italy' },
+      { option: 'JP', label: 'Japan' },
+      { option: 'KR', label: 'Korea, South' },
+      { option: 'LV', label: 'Latvia' },
+      { option: 'LT', label: 'Lithuania' },
+      { option: 'LU', label: 'Luxembourg' },
+      { option: 'MT', label: 'Malta' },
+      { option: 'NL', label: 'Netherlands' },
+      { option: 'PT', label: 'Portugal' },
+      { option: 'SG', label: 'Singapore' },
+      { option: 'SK', label: 'Slovakia' },
+      { option: 'SI', label: 'Slovenia' },
+      { option: 'ES', label: 'Spain' },
+      { option: 'TH', label: 'Thailand' },
     ],
     showConfig: {
-      label: 'Favorite cuisine',
+      label: 'Country',
+      displayInProfile: false,
     },
     saveConfig: {
-      label: 'Favorite cuisine',
-      displayInSignUp: true,
-      isRequired: true,
-    },
-    userTypeConfig: {
-      limitToUserTypeIds: true,
-      userTypeIds: ['a', 'b', 'c'],
-    },
-  },
-  {
-    key: 'canCook',
-    scope: 'public',
-    schemaType: 'boolean',
-    showConfig: {
-      label: 'Can you cook?',
-    },
-    saveConfig: {
-      label: 'Can you cook?',
-      displayInSignUp: true,
-      isRequired: true,
-      placeholderMessage: 'Select...',
-    },
-    userTypeConfig: {
-      limitToUserTypeIds: true,
-      userTypeIds: ['a', 'b', 'c'],
-    },
-  },
-  {
-    key: 'numberOfCookbooks',
-    scope: 'public',
-    schemaType: 'long',
-    showConfig: {
-      label: 'How many cookbooks do you have',
-    },
-    saveConfig: {
-      label: 'How many cookbooks do you have',
-      displayInSignUp: true,
-      isRequired: true,
-    },
-    userTypeConfig: {
-      limitToUserTypeIds: true,
-      userTypeIds: ['a', 'b', 'c'],
-    },
-  },
-  {
-    key: 'kitchenDescription',
-    scope: 'public',
-    schemaType: 'text',
-    showConfig: {
-      label: 'Description of your kitchen',
-    },
-    saveConfig: {
-      label: 'Description of your kitchen',
-      displayInSignUp: true,
-      isRequired: true,
-      placeholderMessage: 'Describe your kitchen...',
-    },
-    userTypeConfig: {
-      label: 'Description of your kitchen',
-      limitToUserTypeIds: true,
-      userTypeIds: ['a', 'b', 'c'],
-    },
-  },
-  {
-    key: 'arrivalInstructions',
-    scope: 'protected',
-    schemaType: 'text',
-    showConfig: {
-      label: 'How do people arrive at your kitchen?',
-    },
-    saveConfig: {
-      label: 'How do people arrive at your kitchen?',
-      displayInSignUp: true,
-      isRequired: true,
+      label: 'Country',
+      isRequired: false,
+      displayInSignUp: false,
     },
     userTypeConfig: {
       limitToUserTypeIds: false,
-      userTypeIds: ['a', 'b', 'c'],
     },
   },
   {
-    key: 'dietaryPreferences',
-    scope: 'public',
-    schemaType: 'multi-enum',
-    enumOptions: [
-      { option: 'vegan', label: 'Vegan' },
-      { option: 'vegetarian', label: 'Vegetarian' },
-      { option: 'gluten-free', label: 'Gluten free' },
-      { option: 'dairy-free', label: 'Dairy free' },
-      { option: 'nut-free', label: 'Nut free' },
-      { option: 'egg-free', label: 'Egg free' },
-      { option: 'low-carb', label: 'Low carb' },
-      { option: 'low-fat', label: 'Low fat' },
-    ],
+    key: 'streetAddress',
+    scope: 'private',
+    schemaType: 'text',
     showConfig: {
-      label: 'Dietary preferences',
+      label: 'Street Address',
+      displayInProfile: false,
     },
     saveConfig: {
-      displayInSignUp: true,
-      label: 'Dietary preferences',
-      isRequired: true,
+      label: 'Street Address',
+      placeholderMessage: '123 Main St',
+      isRequired: false,
+      displayInSignUp: false,
     },
     userTypeConfig: {
-      limitToUserTypeIds: true,
-      userTypeIds: ['a', 'b', 'c'],
+      limitToUserTypeIds: false,
+    },
+  },
+  {
+    key: 'streetAddress2',
+    scope: 'private',
+    schemaType: 'text',
+    showConfig: {
+      label: 'Street Address 2',
+      displayInProfile: false,
+    },
+    saveConfig: {
+      label: 'Apt, Suite, Unit (optional)',
+      placeholderMessage: 'Apt 4B',
+      isRequired: false,
+      displayInSignUp: false,
+    },
+    userTypeConfig: {
+      limitToUserTypeIds: false,
+    },
+  },
+  {
+    key: 'city',
+    scope: 'private',
+    schemaType: 'text',
+    showConfig: {
+      label: 'City',
+      displayInProfile: false,
+    },
+    saveConfig: {
+      label: 'City',
+      placeholderMessage: 'Toronto',
+      isRequired: false,
+      displayInSignUp: false,
+    },
+    userTypeConfig: {
+      limitToUserTypeIds: false,
+    },
+  },
+  {
+    key: 'stateProvince',
+    scope: 'private',
+    schemaType: 'text',
+    showConfig: {
+      label: 'State / Province',
+      displayInProfile: false,
+    },
+    saveConfig: {
+      label: 'State / Province',
+      placeholderMessage: 'Ontario',
+      isRequired: false,
+      displayInSignUp: false,
+    },
+    userTypeConfig: {
+      limitToUserTypeIds: false,
+    },
+  },
+  {
+    key: 'postalCode',
+    scope: 'private',
+    schemaType: 'text',
+    showConfig: {
+      label: 'Zip / Postal Code',
+      displayInProfile: false,
+    },
+    saveConfig: {
+      label: 'Zip / Postal Code',
+      placeholderMessage: '90210 or M5V 3A8',
+      isRequired: false,
+      displayInSignUp: false,
+    },
+    userTypeConfig: {
+      limitToUserTypeIds: false,
     },
   },
 ];

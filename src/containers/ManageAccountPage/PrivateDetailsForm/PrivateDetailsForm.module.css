@@ -31,6 +31,26 @@
   }
 }
 
+.addressSectionHeading {
+  margin-top: 32px;
+  margin-bottom: 16px;
+
+  @media (--viewportMedium) {
+    margin-top: 40px;
+  }
+}
+
+.addressHeading {
+  margin-top: 0;
+  margin-bottom: 6px;
+}
+
+.addressSubtitle {
+  composes: marketplaceSmallFontStyles from global;
+  color: var(--colorGrey600);
+  margin: 0;
+}
+
 .submitButton {
   margin-top: 24px;
   margin-bottom: 56px;
