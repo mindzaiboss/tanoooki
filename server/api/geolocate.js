@@ -40,18 +40,21 @@ module.exports = (req, res) => {
 
     res.json({
       success: true,
-      countryCode,          // e.g. 'CA'
-      currency,             // e.g. 'CAD'
-      region: geo?.region || null,  // e.g. 'ON' for Ontario, 'CA' for California
-      city: geo?.city || null,      // e.g. 'Toronto'
-      ll: geo?.ll || null,          // e.g. [43.7001, -79.4163] lat/long coordinates
+      countryCode,
+      currency,
+      region: geo?.region || null,
+      city: geo?.city || null,
+      ll: geo?.ll || null,
     });
   } catch (error) {
     console.error('Geolocate error:', error);
-    // Default to USD on error — better to show something than nothing
     res.json({
       success: true,
       countryCode: 'US',
       currency: 'USD',
       region: null,
-      city: n
+      city: null,
+      ll: null,
+    });
+  }
+};

@@ -226,32 +226,50 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
         zip: postalCode,
         country: country || 'US',
       });
-    } else if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        pos => {
-          const { latitude, longitude } = pos.coords;
-          fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-          )
-            .then(r => r.json())
-            .then(geoData => {
-              const addr = geoData.address || {};
-              setUsingGeo(true);
-              fetchRates({
-                name: 'Buyer',
-                street1: '',
-                city: addr.city || addr.town || addr.village || '',
-                state: addr.state || '',
-                zip: addr.postcode || '',
-                country: addr.country_code?.toUpperCase() || 'US',
-              });
-            })
-            .catch(() => setFailed(true));
-        },
-        () => setFailed(true)
-      );
     } else {
-      setFailed(true);
+      fetch('/api/geolocate')
+        .then(r => r.json())
+        .then(geoData => {
+          const { countryCode, region, city } = geoData;
+          const country = countryCode || 'US';
+          const noLocation = !city && !region;
+
+          // Fallbacks for localhost/dev where IP geolocation returns null
+          const COUNTRY_FALLBACKS = {
+            US: { city: 'Chicago', state: 'IL', zip: '60601' },
+            CA: { city: 'Toronto', state: 'ON', zip: 'M5V 3A8' },
+            GB: { city: 'London', state: '', zip: '' },
+            AU: { city: 'Sydney', state: 'NSW', zip: '' },
+            DE: { city: 'Berlin', state: '', zip: '' },
+            FR: { city: 'Paris', state: '', zip: '' },
+            JP: { city: 'Tokyo', state: '', zip: '' },
+            CN: { city: 'Beijing', state: '', zip: '' },
+            KR: { city: 'Seoul', state: '', zip: '' },
+            MX: { city: 'Mexico City', state: '', zip: '' },
+            BR: { city: 'Brasilia', state: '', zip: '' },
+            IN: { city: 'New Delhi', state: '', zip: '' },
+            SG: { city: 'Singapore', state: '', zip: '' },
+            HK: { city: 'Hong Kong', state: '', zip: '' },
+            NL: { city: 'Amsterdam', state: '', zip: '' },
+            IT: { city: 'Rome', state: '', zip: '' },
+            ES: { city: 'Madrid', state: '', zip: '' },
+          };
+
+          const fallback = noLocation
+            ? COUNTRY_FALLBACKS[country] || { city: '', state: '', zip: '' }
+            : null;
+
+          setUsingGeo(true);
+          fetchRates({
+            name: 'Buyer',
+            street1: '',
+            city: fallback ? fallback.city : city,
+            state: fallback ? fallback.state : region || '',
+            zip: fallback ? fallback.zip : '',
+            country,
+          });
+        })
+        .catch(() => setFailed(true));
     }
   }, [isShipping, userId]);
 
