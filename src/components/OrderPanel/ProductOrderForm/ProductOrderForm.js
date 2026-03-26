@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useSelector } from 'react-redux';
 import { Form as FinalForm, FormSpy } from 'react-final-form';
 
 import { FormattedMessage, useIntl } from '../../../util/reactIntl';
@@ -35,9 +36,11 @@ const handleFetchLineItems = ({
   isOwnListing,
   fetchLineItemsInProgress,
   onFetchTransactionLineItems,
+  shippingAmount,
 }) => {
   const stockReservationQuantity = Number.parseInt(quantity, 10);
   const deliveryMethodMaybe = deliveryMethod ? { deliveryMethod } : {};
+  const shippingAmountMaybe = shippingAmount ? { shippingAmount } : {};
   const isBrowser = typeof window !== 'undefined';
   if (
     isBrowser &&
@@ -46,7 +49,7 @@ const handleFetchLineItems = ({
     !fetchLineItemsInProgress
   ) {
     onFetchTransactionLineItems({
-      orderData: { stockReservationQuantity, ...deliveryMethodMaybe },
+      orderData: { stockReservationQuantity, ...deliveryMethodMaybe, ...shippingAmountMaybe },
       listingId,
       isOwnListing,
     });
@@ -109,6 +112,210 @@ const DeliveryMethodMaybe = props => {
   );
 };
 
+const roundToNearest9 = amount => {
+  const cents = Math.ceil(amount * 100);
+  const mod = cents % 10;
+  if (mod === 9) return cents / 100;
+  return (cents + (9 - mod)) / 100;
+};
+
+const applyMarkup = amount => {
+  const markup = Math.max(amount * 0.05, 0.5);
+  return roundToNearest9(amount + markup);
+};
+
+const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
+  const [rateTiers, setRateTiers] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [usingGeo, setUsingGeo] = useState(false);
+  const [selectedTier, setSelectedTier] = useState('economy');
+
+  const currentUser = useSelector(state => state.user.currentUser);
+
+  const publicData = listing?.attributes?.publicData || {};
+  console.log('listing publicData:', publicData);
+  const {
+    pub_packageWeight,
+    pub_packageWeightUnit = 'lb',
+    pub_packageLength,
+    pub_packageWidth,
+    pub_packageHeight,
+    pub_packageDistanceUnit = 'in',
+    pub_shipFrom,
+  } = publicData;
+
+  const hasPackageData =
+    pub_packageWeight && pub_packageLength && pub_packageWidth && pub_packageHeight;
+  const isShipping = deliveryMethod === 'shipping';
+  const userId = currentUser?.id?.uuid;
+
+  useEffect(() => {
+    if (!isShipping || !hasPackageData) return;
+
+    const sellerAddress = pub_shipFrom || {
+      name: 'Seller',
+      street1: '215 Clayton St',
+      city: 'San Francisco',
+      state: 'CA',
+      zip: '94117',
+      country: 'US',
+    };
+
+    const fetchRates = async addressTo => {
+      setLoading(true);
+      setFailed(false);
+      try {
+        const payload = {
+          addressFrom: sellerAddress,
+          addressTo,
+          parcel: {
+            weight: pub_packageWeight,
+            mass_unit: pub_packageWeightUnit,
+            length: pub_packageLength,
+            width: pub_packageWidth,
+            height: pub_packageHeight,
+            distance_unit: pub_packageDistanceUnit,
+          },
+        };
+        console.log('ShippingRatesMaybe payload:', JSON.stringify(payload, null, 2));
+        const res = await fetch('/api/shippo-rates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (data.rates && data.rates.length > 0) {
+          const byPrice = [...data.rates].sort(
+            (a, b) => parseFloat(a.amount) - parseFloat(b.amount)
+          );
+          const bySpeed = [...data.rates].sort(
+            (a, b) => (a.estimatedDays || 999) - (b.estimatedDays || 999)
+          );
+          const economy = byPrice[0];
+          const express = bySpeed[0];
+          const standard = byPrice[Math.floor(byPrice.length / 2)];
+          setRateTiers({ economy, standard, express });
+          setSelectedTier('economy');
+          formApi.change('shippingRate', {
+            tier: 'economy',
+            ...economy,
+            displayAmount: applyMarkup(parseFloat(economy.amount)),
+          });
+        } else {
+          setFailed(true);
+        }
+      } catch (e) {
+        setFailed(true);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    const privateData = currentUser?.attributes?.profile?.privateData || {};
+    const { streetAddress, city, stateProvince, postalCode, country } = privateData;
+    const hasAddress = streetAddress && city && postalCode;
+
+    if (hasAddress) {
+      setUsingGeo(false);
+      fetchRates({
+        name: 'Buyer',
+        street1: streetAddress,
+        city,
+        state: stateProvince || '',
+        zip: postalCode,
+        country: country || 'US',
+      });
+    } else if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => {
+          const { latitude, longitude } = pos.coords;
+          fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+          )
+            .then(r => r.json())
+            .then(geoData => {
+              const addr = geoData.address || {};
+              setUsingGeo(true);
+              fetchRates({
+                name: 'Buyer',
+                street1: '',
+                city: addr.city || addr.town || addr.village || '',
+                state: addr.state || '',
+                zip: addr.postcode || '',
+                country: addr.country_code?.toUpperCase() || 'US',
+              });
+            })
+            .catch(() => setFailed(true));
+        },
+        () => setFailed(true)
+      );
+    } else {
+      setFailed(true);
+    }
+  }, [isShipping, userId]);
+
+  if (!isShipping || !hasPackageData) return null;
+
+  if (loading) {
+    return (
+      <div className={css.shippingRates}>
+        <p className={css.shippingRatesLoading}>Calculating shipping...</p>
+      </div>
+    );
+  }
+
+  if (failed) {
+    return (
+      <div className={css.shippingRates}>
+        <p className={css.shippingRatesUnavailable}>Shipping unavailable</p>
+      </div>
+    );
+  }
+
+  if (!rateTiers) return null;
+
+  const tiers = [
+    { key: 'economy', label: 'Economy', rate: rateTiers.economy },
+    { key: 'standard', label: 'Standard', rate: rateTiers.standard },
+    { key: 'express', label: 'Express', rate: rateTiers.express },
+  ];
+
+  const handleTierChange = e => {
+    const tier = e.target.value;
+    setSelectedTier(tier);
+    const rate = rateTiers[tier];
+    formApi.change('shippingRate', {
+      tier,
+      ...rate,
+      displayAmount: applyMarkup(parseFloat(rate.amount)),
+    });
+  };
+
+  return (
+    <div className={css.shippingRates}>
+      <label className={css.shippingRatesLabel}>Shipping</label>
+      <select className={css.shippingRatesSelect} value={selectedTier} onChange={handleTierChange}>
+        {tiers.map(({ key, label, rate }) => {
+          const price = applyMarkup(parseFloat(rate.amount));
+          const days = rate.estimatedDays ? ` (${rate.estimatedDays} days)` : '';
+          return (
+            <option key={key} value={key}>
+              {label}
+              {days} — ${price.toFixed(2)} {rate.currency}
+            </option>
+          );
+        })}
+      </select>
+      {usingGeo ? (
+        <p className={css.shippingRatesDisclaimer}>
+          Estimated shipping based on your location. Sign up or add your address for exact rates.
+        </p>
+      ) : null}
+    </div>
+  );
+};
+
 const renderForm = formRenderProps => {
   const [mounted, setMounted] = useState(false);
   const {
@@ -133,6 +340,7 @@ const renderForm = formRenderProps => {
     price,
     payoutDetailsWarning,
     marketplaceName,
+    listing,
     values,
   } = formRenderProps;
 
@@ -157,7 +365,10 @@ const renderForm = formRenderProps => {
 
   // If form values change, update line-items for the order breakdown
   const handleOnChange = formValues => {
-    const { quantity, deliveryMethod } = formValues.values;
+    const { quantity, deliveryMethod, shippingRate } = formValues.values;
+    const shippingAmount = shippingRate?.displayAmount
+      ? Math.round(shippingRate.displayAmount * 100)
+      : undefined;
     if (mounted) {
       handleFetchLineItems({
         quantity,
@@ -166,6 +377,7 @@ const renderForm = formRenderProps => {
         isOwnListing,
         fetchLineItemsInProgress,
         onFetchTransactionLineItems,
+        shippingAmount,
       });
     }
   };
@@ -222,6 +434,7 @@ const renderForm = formRenderProps => {
   return (
     <Form onSubmit={handleFormSubmit}>
       <FormSpy subscription={{ values: true }} onChange={handleOnChange} />
+
       {hasNoStockLeft ? null : hasOneItemLeft || !allowOrdersOfMultipleItems ? (
         <FieldTextInput
           id={`${formId}.quantity`}
@@ -257,6 +470,12 @@ const renderForm = formRenderProps => {
         hasStock={hasStock}
         formId={formId}
         intl={intl}
+      />
+
+      <ShippingRatesMaybe
+        listing={listing}
+        formApi={formApi}
+        deliveryMethod={values?.deliveryMethod}
       />
 
       {showBreakdown ? (

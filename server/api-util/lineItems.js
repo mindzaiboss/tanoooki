@@ -21,18 +21,24 @@ const getItemQuantityAndLineItems = (orderData, publicData, currency) => {
   const deliveryMethod = orderData && orderData.deliveryMethod;
   const isShipping = deliveryMethod === 'shipping';
   const isPickup = deliveryMethod === 'pickup';
-  const { shippingPriceInSubunitsOneItem, shippingPriceInSubunitsAdditionalItems } =
-    publicData || {};
 
-  // Calculate shipping fee if applicable
-  const shippingFee = isShipping
-    ? calculateShippingFee(
+  // If a dynamic shippingAmount (in subunits) was calculated client-side (e.g. via Shippo),
+  // use that directly. Otherwise fall back to the listing's static shipping price fields.
+  let shippingFee = null;
+  if (isShipping) {
+    if (orderData.shippingAmount) {
+      shippingFee = new Money(orderData.shippingAmount, currency);
+    } else {
+      const { shippingPriceInSubunitsOneItem, shippingPriceInSubunitsAdditionalItems } =
+        publicData || {};
+      shippingFee = calculateShippingFee(
         shippingPriceInSubunitsOneItem,
         shippingPriceInSubunitsAdditionalItems,
         currency,
         quantity
-      )
-    : null;
+      );
+    }
+  }
 
   // Add line-item for given delivery method.
   // Note: by default, pickup considered as free and, therefore, we don't add pickup fee line-item

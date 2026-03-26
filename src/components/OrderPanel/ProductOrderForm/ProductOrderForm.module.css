@@ -86,3 +86,52 @@
     padding: 0;
   }
 }
+
+.shippingRates {
+  padding: 0 24px;
+  margin-top: 24px;
+
+  @media (--viewportMedium) {
+    padding: 0;
+  }
+}
+
+.shippingRatesLabel {
+  composes: label from global;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.shippingRatesSelect {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--colorGrey300);
+  border-radius: var(--borderRadius);
+  font-size: 16px;
+  background-color: var(--colorWhite);
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: var(--marketplaceColor);
+  }
+}
+
+.shippingRatesDisclaimer {
+  composes: marketplaceTinyFontStyles from global;
+  color: var(--colorGrey500);
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
+.shippingRatesLoading {
+  composes: marketplaceTinyFontStyles from global;
+  color: var(--colorGrey500);
+  margin: 0;
+}
+
+.shippingRatesUnavailable {
+  composes: marketplaceTinyFontStyles from global;
+  color: var(--colorGrey500);
+  margin: 0;
+}

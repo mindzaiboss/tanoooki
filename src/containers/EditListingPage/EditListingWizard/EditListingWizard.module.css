@@ -11,6 +11,19 @@
   z-index: 0;
 }
 
+.missingDimensionsError {
+  composes: marketplaceSmallFontStyles from global;
+  color: var(--colorFail);
+  border: 1px solid var(--colorFail);
+  border-radius: var(--borderRadius);
+  padding: 10px 16px;
+  margin: 0 24px 16px;
+
+  @media (--viewportLarge) {
+    margin: 0 36px 16px;
+  }
+}
+
 .tabsContainer {
   flex-grow: 1;
   /* Layout */

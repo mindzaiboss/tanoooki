@@ -256,8 +256,15 @@ const tabCompleted = (tab, listing, config) => {
       return !!price;
     case PRICING_AND_STOCK:
       return !!price;
-    case DELIVERY:
-      return !!deliveryOptionPicked;
+    case DELIVERY: {
+      if (!deliveryOptionPicked) return false;
+      if (shippingEnabled) {
+        const { pub_packageWeight, pub_packageLength, pub_packageWidth, pub_packageHeight } =
+          publicData;
+        return !!(pub_packageWeight && pub_packageLength && pub_packageWidth && pub_packageHeight);
+      }
+      return true;
+    }
     case LOCATION:
       return !!(geolocation && publicData?.location?.address);
     case AVAILABILITY:
@@ -415,6 +422,7 @@ class EditListingWizard extends Component {
       showPayoutDetails: false,
       selectedListingType: null,
       mounted: false,
+      missingDimensionsError: false,
     };
     this.handleCreateFlowTabScrolling = this.handleCreateFlowTabScrolling.bind(this);
     this.handlePublishListing = this.handlePublishListing.bind(this);
@@ -438,6 +446,18 @@ class EditListingWizard extends Component {
 
   handlePublishListing(id) {
     const { onPublishListingDraft, currentUser, stripeAccount, listing, config } = this.props;
+
+    // Block publish if shipping is enabled but package dimensions are missing
+    const publicData = listing?.attributes?.publicData || {};
+    if (publicData.shippingEnabled) {
+      const { pub_packageWeight, pub_packageLength, pub_packageWidth, pub_packageHeight } =
+        publicData;
+      if (!pub_packageWeight || !pub_packageLength || !pub_packageWidth || !pub_packageHeight) {
+        this.setState({ missingDimensionsError: true });
+        return;
+      }
+    }
+    this.setState({ missingDimensionsError: false });
     const processName = listing?.attributes?.publicData?.transactionProcessAlias.split('/')[0];
     const isInquiryProcess = processName === INQUIRY_PROCESS_NAME;
 
@@ -653,8 +673,15 @@ class EditListingWizard extends Component {
       return <NamedRedirect name="EditListingPage" params={pathParams} />;
     }
 
+    const { missingDimensionsError } = this.state;
+
     return (
       <div className={classes}>
+        {missingDimensionsError ? (
+          <p className={css.missingDimensionsError}>
+            Please add package dimensions in the Delivery tab before publishing.
+          </p>
+        ) : null}
         <Tabs
           rootClassName={css.tabsContainer}
           navRootClassName={css.nav}
