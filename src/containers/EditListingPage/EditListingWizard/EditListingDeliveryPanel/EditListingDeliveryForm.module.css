@@ -88,3 +88,57 @@
     margin-top: 100px;
   }
 }
+
+/* Package dimensions section */
+
+.packageSection {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--colorGrey100);
+}
+
+.packageSectionTitle {
+  composes: h5 from global;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.packageHint {
+  composes: marketplaceSmallFontStyles from global;
+  color: var(--colorGrey500);
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.weightRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.dimensionsRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.numberInput {
+  flex: 1;
+  min-width: 0;
+  margin-bottom: 24px;
+
+  @media (--viewportMedium) {
+    margin-bottom: 32px;
+  }
+}
+
+.unitSelect {
+  flex-shrink: 0;
+  width: 72px;
+  margin-bottom: 24px;
+
+  @media (--viewportMedium) {
+    margin-bottom: 32px;
+  }
+}
+

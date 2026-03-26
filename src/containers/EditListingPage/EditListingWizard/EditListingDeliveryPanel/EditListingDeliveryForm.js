@@ -3,7 +3,6 @@ import { Form as FinalForm } from 'react-final-form';
 import classNames from 'classnames';
 
 // Import configs and util modules
-import appSettings from '../../../../config/settings';
 import { FormattedMessage, useIntl } from '../../../../util/reactIntl';
 import { propTypes } from '../../../../util/types';
 import { displayDeliveryPickup, displayDeliveryShipping } from '../../../../util/configHelpers';
@@ -19,9 +18,9 @@ import {
   Form,
   FieldLocationAutocompleteInput,
   Button,
-  FieldCurrencyInput,
   FieldTextInput,
   FieldCheckbox,
+  FieldSelect,
 } from '../../../../components';
 
 // Import modules from this directory
@@ -38,9 +37,6 @@ const identity = v => v;
  * @param {string} [props.className] - Custom class that extends the default class for the root element
  * @param {Function} props.onSubmit - The submit function
  * @param {string} props.saveActionMsg - The save action message
- * @param {Object} props.selectedPlace - The selected place
- * @param {string} props.marketplaceCurrency - The marketplace currency
- * @param {boolean} props.hasStockInUse - Whether the stock is in use
  * @param {boolean} props.disabled - Whether the form is disabled
  * @param {boolean} props.ready - Whether the form is ready
  * @param {boolean} props.updated - Whether the form is updated
@@ -66,8 +62,6 @@ export const EditListingDeliveryForm = props => (
         pristine,
         invalid,
         listingTypeConfig,
-        marketplaceCurrency,
-        allowOrdersOfMultipleItems = false,
         saveActionMsg,
         updated,
         updateInProgress,
@@ -112,8 +106,7 @@ export const EditListingDeliveryForm = props => (
       const classes = classNames(css.root, className);
       const submitReady = (updated && pristine) || ready;
       const submitInProgress = updateInProgress;
-      const submitDisabled =
-        invalid || disabled || submitInProgress || (!shippingEnabled && !pickupEnabled);
+      const submitDisabled = invalid || disabled || submitInProgress;
 
       const shippingLabel = intl.formatMessage({ id: 'EditListingDeliveryForm.shippingLabel' });
       const pickupLabel = intl.formatMessage({ id: 'EditListingDeliveryForm.pickupLabel' });
@@ -128,7 +121,8 @@ export const EditListingDeliveryForm = props => (
         [css.disabled]: !shippingEnabled,
         [css.hidden]: !displayShipping,
       });
-      const currencyConfig = appSettings.getCurrencyFormatting(marketplaceCurrency);
+
+      const fieldDisabled = !shippingEnabled || !!disabled;
 
       return (
         <Form className={classes} onSubmit={handleSubmit}>
@@ -178,12 +172,6 @@ export const EditListingDeliveryForm = props => (
                   : () => {}
               }
               hideErrorMessage={!pickupEnabled}
-              // Whatever parameters are being used to calculate
-              // the validation function need to be combined in such
-              // a way that, when they change, this key prop
-              // changes, thus reregistering this field (and its
-              // validation function) with Final Form.
-              // See example: https://codesandbox.io/s/changing-field-level-validators-zc8ei
               key={pickupEnabled ? 'locationValidation' : 'noLocationValidation'}
             />
 
@@ -212,77 +200,88 @@ export const EditListingDeliveryForm = props => (
           />
 
           <div className={shippingClasses}>
-            <FieldCurrencyInput
-              id={
-                formId
-                  ? `${formId}.shippingPriceInSubunitsOneItem`
-                  : 'shippingPriceInSubunitsOneItem'
-              }
-              name="shippingPriceInSubunitsOneItem"
-              className={css.input}
-              label={intl.formatMessage({
-                id: 'EditListingDeliveryForm.shippingOneItemLabel',
-              })}
-              placeholder={intl.formatMessage({
-                id: 'EditListingDeliveryForm.shippingOneItemPlaceholder',
-              })}
-              currencyConfig={currencyConfig}
-              disabled={!shippingEnabled}
-              validate={
-                shippingEnabled
-                  ? required(
-                      intl.formatMessage({
-                        id: 'EditListingDeliveryForm.shippingOneItemRequired',
-                      })
-                    )
-                  : null
-              }
-              hideErrorMessage={!shippingEnabled}
-              // Whatever parameters are being used to calculate
-              // the validation function need to be combined in such
-              // a way that, when they change, this key prop
-              // changes, thus reregistering this field (and its
-              // validation function) with Final Form.
-              // See example: https://codesandbox.io/s/changing-field-level-validators-zc8ei
-              key={shippingEnabled ? 'oneItemValidation' : 'noOneItemValidation'}
-            />
+            <div className={css.packageSection}>
+              <p className={css.packageSectionTitle}>Package Details</p>
 
-            {allowOrdersOfMultipleItems ? (
-              <FieldCurrencyInput
-                id={
-                  formId
-                    ? `${formId}.shippingPriceInSubunitsAdditionalItems`
-                    : 'shippingPriceInSubunitsAdditionalItems'
-                }
-                name="shippingPriceInSubunitsAdditionalItems"
-                className={css.input}
-                label={intl.formatMessage({
-                  id: 'EditListingDeliveryForm.shippingAdditionalItemsLabel',
-                })}
-                placeholder={intl.formatMessage({
-                  id: 'EditListingDeliveryForm.shippingAdditionalItemsPlaceholder',
-                })}
-                currencyConfig={currencyConfig}
-                disabled={!shippingEnabled}
-                validate={
-                  shippingEnabled
-                    ? required(
-                        intl.formatMessage({
-                          id: 'EditListingDeliveryForm.shippingAdditionalItemsRequired',
-                        })
-                      )
-                    : null
-                }
-                hideErrorMessage={!shippingEnabled}
-                // Whatever parameters are being used to calculate
-                // the validation function need to be combined in such
-                // a way that, when they change, this key prop
-                // changes, thus reregistering this field (and its
-                // validation function) with Final Form.
-                // See example: https://codesandbox.io/s/changing-field-level-validators-zc8ei
-                key={shippingEnabled ? 'additionalItemsValidation' : 'noAdditionalItemsValidation'}
-              />
-            ) : null}
+              <div className={css.weightRow}>
+                <FieldTextInput
+                  className={css.numberInput}
+                  type="number"
+                  name="packageWeight"
+                  id={`${formId}.packageWeight`}
+                  label="Weight"
+                  placeholder="e.g. 1.5"
+                  min="0"
+                  step="any"
+                  disabled={fieldDisabled}
+                  validate={shippingEnabled ? required('Weight is required') : undefined}
+                />
+                <FieldSelect
+                  className={css.unitSelect}
+                  id={`${formId}.packageWeightUnit`}
+                  name="packageWeightUnit"
+                  label="Unit"
+                  disabled={fieldDisabled}
+                >
+                  <option value="lb">lb</option>
+                  <option value="kg">kg</option>
+                </FieldSelect>
+              </div>
+
+              <div className={css.dimensionsRow}>
+                <FieldTextInput
+                  className={css.numberInput}
+                  type="number"
+                  name="packageLength"
+                  id={`${formId}.packageLength`}
+                  label="Length"
+                  placeholder="L"
+                  min="0"
+                  step="any"
+                  disabled={fieldDisabled}
+                  validate={shippingEnabled ? required('Length is required') : undefined}
+                />
+                <FieldTextInput
+                  className={css.numberInput}
+                  type="number"
+                  name="packageWidth"
+                  id={`${formId}.packageWidth`}
+                  label="Width"
+                  placeholder="W"
+                  min="0"
+                  step="any"
+                  disabled={fieldDisabled}
+                  validate={shippingEnabled ? required('Width is required') : undefined}
+                />
+                <FieldTextInput
+                  className={css.numberInput}
+                  type="number"
+                  name="packageHeight"
+                  id={`${formId}.packageHeight`}
+                  label="Height"
+                  placeholder="H"
+                  min="0"
+                  step="any"
+                  disabled={fieldDisabled}
+                  validate={shippingEnabled ? required('Height is required') : undefined}
+                />
+                <FieldSelect
+                  className={css.unitSelect}
+                  id={`${formId}.packageDistanceUnit`}
+                  name="packageDistanceUnit"
+                  label="Unit"
+                  disabled={fieldDisabled}
+                >
+                  <option value="in">in</option>
+                  <option value="cm">cm</option>
+                </FieldSelect>
+              </div>
+
+              <p className={css.packageHint}>
+                Shipping rates are calculated automatically based on your buyer's location. Buyers
+                will see Economy, Standard, and Express options.
+              </p>
+            </div>
           </div>
 
           <Button

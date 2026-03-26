@@ -5,12 +5,9 @@ import classNames from 'classnames';
 import { FormattedMessage } from '../../../../util/reactIntl';
 import {
   LISTING_STATE_DRAFT,
-  STOCK_INFINITE_MULTIPLE_ITEMS,
-  STOCK_MULTIPLE_ITEMS,
   propTypes,
 } from '../../../../util/types';
 import { displayDeliveryPickup, displayDeliveryShipping } from '../../../../util/configHelpers';
-import { types as sdkTypes } from '../../../../util/sdkLoader';
 
 // Import shared components
 import { H3, ListingLink } from '../../../../components';
@@ -19,28 +16,29 @@ import { H3, ListingLink } from '../../../../components';
 import EditListingDeliveryForm from './EditListingDeliveryForm';
 import css from './EditListingDeliveryPanel.module.css';
 
-const { Money } = sdkTypes;
-
 const getInitialValues = props => {
-  const { listing, listingTypes, marketplaceCurrency } = props;
-  const { geolocation, publicData, price } = listing?.attributes || {};
+  const { listing } = props;
+  const { geolocation, publicData } = listing?.attributes || {};
 
   const listingType = listing?.attributes?.publicData?.listingType;
+  const listingTypes = props.listingTypes;
   const listingTypeConfig = listingTypes.find(conf => conf.listingType === listingType);
   const displayShipping = displayDeliveryShipping(listingTypeConfig);
   const displayPickup = displayDeliveryPickup(listingTypeConfig);
   const displayMultipleDelivery = displayShipping && displayPickup;
 
-  // Only render current search if full place object is available in the URL params
-  // TODO bounds are missing - those need to be queried directly from Google Places
   const locationFieldsPresent = publicData?.location?.address && geolocation;
   const location = publicData?.location || {};
   const { address, building } = location;
   const {
     shippingEnabled,
     pickupEnabled,
-    shippingPriceInSubunitsOneItem,
-    shippingPriceInSubunitsAdditionalItems,
+    pub_packageWeight,
+    pub_packageWeightUnit,
+    pub_packageLength,
+    pub_packageWidth,
+    pub_packageHeight,
+    pub_packageDistanceUnit,
   } = publicData;
   const deliveryOptions = [];
 
@@ -51,17 +49,6 @@ const getInitialValues = props => {
     deliveryOptions.push('pickup');
   }
 
-  const currency = price?.currency || marketplaceCurrency;
-  const shippingOneItemAsMoney =
-    shippingPriceInSubunitsOneItem != null
-      ? new Money(shippingPriceInSubunitsOneItem, currency)
-      : null;
-  const shippingAdditionalItemsAsMoney =
-    shippingPriceInSubunitsAdditionalItems != null
-      ? new Money(shippingPriceInSubunitsAdditionalItems, currency)
-      : null;
-
-  // Initial values for the form
   return {
     building,
     location: locationFieldsPresent
@@ -71,8 +58,12 @@ const getInitialValues = props => {
         }
       : { search: undefined, selectedPlace: undefined },
     deliveryOptions,
-    shippingPriceInSubunitsOneItem: shippingOneItemAsMoney,
-    shippingPriceInSubunitsAdditionalItems: shippingAdditionalItemsAsMoney,
+    packageWeight: pub_packageWeight != null ? String(pub_packageWeight) : '',
+    packageWeightUnit: pub_packageWeightUnit || 'lb',
+    packageLength: pub_packageLength != null ? String(pub_packageLength) : '',
+    packageWidth: pub_packageWidth != null ? String(pub_packageWidth) : '',
+    packageHeight: pub_packageHeight != null ? String(pub_packageHeight) : '',
+    packageDistanceUnit: pub_packageDistanceUnit || 'in',
   };
 };
 
@@ -119,12 +110,8 @@ const EditListingDeliveryPanel = props => {
 
   const classes = classNames(rootClassName || css.root, className);
   const isPublished = listing?.id && listing?.attributes.state !== LISTING_STATE_DRAFT;
-  const priceCurrencyValid = listing?.attributes?.price?.currency === marketplaceCurrency;
   const listingType = listing?.attributes?.publicData?.listingType;
   const listingTypeConfig = listingTypes.find(conf => conf.listingType === listingType);
-  const allowOrdersOfMultipleItems = [STOCK_MULTIPLE_ITEMS, STOCK_INFINITE_MULTIPLE_ITEMS].includes(
-    listingTypeConfig?.stockType
-  );
 
   const panelHeadingProps = isPublished
     ? {
@@ -149,82 +136,76 @@ const EditListingDeliveryPanel = props => {
       <H3 as="h1">
         <FormattedMessage id={panelHeadingProps.id} values={{ ...panelHeadingProps.values }} />
       </H3>
-      {priceCurrencyValid ? (
-        <EditListingDeliveryForm
-          className={css.form}
-          initialValues={state.initialValues}
-          onSubmit={values => {
-            const {
-              building = '',
-              location,
-              shippingPriceInSubunitsOneItem,
-              shippingPriceInSubunitsAdditionalItems,
+      <EditListingDeliveryForm
+        className={css.form}
+        initialValues={state.initialValues}
+        onSubmit={values => {
+          const {
+            building = '',
+            location,
+            deliveryOptions,
+            packageWeight,
+            packageWeightUnit,
+            packageLength,
+            packageWidth,
+            packageHeight,
+            packageDistanceUnit,
+          } = values;
+
+          const shippingEnabled = deliveryOptions.includes('shipping');
+          const pickupEnabled = deliveryOptions.includes('pickup');
+          const address = location?.selectedPlace?.address || null;
+          const origin = location?.selectedPlace?.origin || null;
+
+          const pickupDataMaybe =
+            pickupEnabled && address ? { location: { address, building } } : {};
+
+          const packageDataMaybe = shippingEnabled
+            ? {
+                pub_packageWeight: parseFloat(packageWeight) || null,
+                pub_packageWeightUnit: packageWeightUnit || 'lb',
+                pub_packageLength: parseFloat(packageLength) || null,
+                pub_packageWidth: parseFloat(packageWidth) || null,
+                pub_packageHeight: parseFloat(packageHeight) || null,
+                pub_packageDistanceUnit: packageDistanceUnit || 'in',
+              }
+            : {};
+
+          const updateValues = {
+            geolocation: origin,
+            publicData: {
+              pickupEnabled,
+              ...pickupDataMaybe,
+              shippingEnabled,
+              ...packageDataMaybe,
+            },
+          };
+
+          setState({
+            initialValues: {
+              building,
+              location: { search: address, selectedPlace: { address, origin } },
               deliveryOptions,
-            } = values;
-
-            const shippingEnabled = deliveryOptions.includes('shipping');
-            const pickupEnabled = deliveryOptions.includes('pickup');
-            const address = location?.selectedPlace?.address || null;
-            const origin = location?.selectedPlace?.origin || null;
-
-            const pickupDataMaybe =
-              pickupEnabled && address ? { location: { address, building } } : {};
-
-            const shippingDataMaybe =
-              shippingEnabled && shippingPriceInSubunitsOneItem != null
-                ? {
-                    // Note: we only save the "amount" because currency should not differ from listing's price.
-                    // Money is always dealt in subunits (e.g. cents) to avoid float calculations.
-                    shippingPriceInSubunitsOneItem: shippingPriceInSubunitsOneItem.amount,
-                    shippingPriceInSubunitsAdditionalItems:
-                      shippingPriceInSubunitsAdditionalItems?.amount,
-                  }
-                : {};
-
-            // New values for listing attributes
-            const updateValues = {
-              geolocation: origin,
-              publicData: {
-                pickupEnabled,
-                ...pickupDataMaybe,
-                shippingEnabled,
-                ...shippingDataMaybe,
-              },
-            };
-
-            // Save the initialValues to state
-            // LocationAutocompleteInput doesn't have internal state
-            // and therefore re-rendering would overwrite the values during XHR call.
-            setState({
-              initialValues: {
-                building,
-                location: { search: address, selectedPlace: { address, origin } },
-                shippingPriceInSubunitsOneItem,
-                shippingPriceInSubunitsAdditionalItems,
-                deliveryOptions,
-              },
-            });
-            onSubmit(updateValues);
-          }}
-          listingTypeConfig={listingTypeConfig}
-          marketplaceCurrency={marketplaceCurrency}
-          allowOrdersOfMultipleItems={allowOrdersOfMultipleItems}
-          saveActionMsg={submitButtonText}
-          disabled={disabled}
-          ready={ready}
-          updated={panelUpdated}
-          updateInProgress={updateInProgress}
-          fetchErrors={errors}
-          autoFocus
-        />
-      ) : (
-        <div className={css.priceCurrencyInvalid}>
-          <FormattedMessage
-            id="EditListingPricingPanel.listingPriceCurrencyInvalid"
-            values={{ marketplaceCurrency }}
-          />
-        </div>
-      )}
+              packageWeight,
+              packageWeightUnit,
+              packageLength,
+              packageWidth,
+              packageHeight,
+              packageDistanceUnit,
+            },
+          });
+          onSubmit(updateValues);
+        }}
+        listingTypeConfig={listingTypeConfig}
+        marketplaceCurrency={marketplaceCurrency}
+        saveActionMsg={submitButtonText}
+        disabled={disabled}
+        ready={ready}
+        updated={panelUpdated}
+        updateInProgress={updateInProgress}
+        fetchErrors={errors}
+        autoFocus
+      />
     </main>
   );
 };
