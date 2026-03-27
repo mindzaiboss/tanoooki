@@ -13,6 +13,8 @@ const geolocate = require('./api/geolocate');
 
 const shippoRates = require('./api/shippo-rates');
 
+const sellerLocation = require('./api/seller-location');
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const { deserialize } = require('./api-util/sdk');
@@ -70,6 +72,7 @@ router.post('/generate-listing', generateListing);
 router.get('/fx-rates', fxRates);
 router.get('/geolocate', geolocate);
 router.post('/shippo-rates', shippoRates);
+router.post('/seller-location', sellerLocation);
 
 // Create user with identity provider (e.g. Facebook or Google)
 // This endpoint is called to create a new user after user has confirmed

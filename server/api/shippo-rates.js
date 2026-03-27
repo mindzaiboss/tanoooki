@@ -29,6 +29,31 @@ const normalizeState = (state) => {
   return PROVINCE_STATE_CODES[state] || state;
 };
 
+const CARRIER_ACCOUNTS_BY_COUNTRY = {
+  CA: [
+    '593a940031554e009ddf8068a66a6b47', // UPS Canada
+    'a7e659b3218c49c182140d682b98f937', // Canada Post
+    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
+  ],
+  US: [
+    '670f42fd1c594430926357ee1739c4f1', // UPS US
+    'f5fad08c7b1a4576b883398d5a1e8225', // USPS
+    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
+  ],
+  GB: [
+    'cf2f0ddf3fb046aaabfdc0f93ec4d487', // Evri UK
+    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
+  ],
+  AU: [
+    'd9b161767e45415fa21c05d3c8d7517c', // Sendle
+    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
+  ],
+  DE: [
+    '3791410183d24e03a384743f5c883515', // Deutsche Post
+    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
+  ],
+};
+
 // ---------------------------------------------------------------------------
 // Tier 1: Exact city match (lowercase key → { street1, zip })
 // ---------------------------------------------------------------------------
@@ -355,21 +380,56 @@ module.exports = async (req, res) => {
         massUnit: resolvedParcel.mass_unit || resolvedParcel.massUnit,
       }],
       async: false,
+      carrierAccounts: CARRIER_ACCOUNTS_BY_COUNTRY[resolvedAddressFrom.country] || undefined,
+      ...(resolvedAddressFrom.country !== resolvedAddressTo.country ? {
+        customsDeclaration: {
+          contentsType: 'MERCHANDISE',
+          contentsExplanation: 'Collectible toy figure',
+          nonDeliveryOption: 'RETURN',
+          certify: true,
+          certifySigner: 'Seller',
+          items: [{
+            description: 'Collectible toy figure',
+            quantity: 1,
+            netWeight: String(resolvedParcel.weight),
+            massUnit: resolvedParcel.massUnit || resolvedParcel.mass_unit || 'lb',
+            valueAmount: '50',
+            valueCurrency: 'USD',
+            originCountry: resolvedAddressFrom.country,
+          }],
+        },
+      } : {}),
     });
 
     console.log('Shipment status:', shipment.status);
     console.log('Shipment messages:', JSON.stringify(shipment.messages, null, 2));
     console.log('Rates count:', shipment.rates?.length);
 
-    const rates = shipment.rates.map(rate => ({
-      rateId: rate.objectId,
-      carrier: rate.provider,
-      service: rate.servicelevel.name,
-      amount: rate.amount,
-      currency: rate.currency,
-      estimatedDays: rate.estimatedDays,
-      durationTerms: rate.durationTerms,
-    }));
+    const SERVICE_BLOCKLIST = [
+      { carrier: 'Canada Post', serviceContains: 'Regular Parcel' },
+      { carrier: 'Canada Post', serviceContains: 'Lettermail' },
+      { carrier: 'UPS', serviceContains: 'Ground Saver' },
+      { carrier: 'UPS', serviceContains: 'Ground' },
+    ];
+
+    const isBlocked = rate =>
+      SERVICE_BLOCKLIST.some(
+        entry =>
+          rate.provider === entry.carrier &&
+          rate.servicelevel.name.includes(entry.serviceContains)
+      );
+
+    const rates = shipment.rates
+      .filter(rate => !isBlocked(rate))
+      .map(rate => ({
+        rateId: rate.objectId,
+        carrier: rate.provider,
+        service: rate.servicelevel.name,
+        amount: rate.amount,
+        currency: rate.currency,
+        estimatedDays: rate.estimatedDays,
+        durationTerms: rate.durationTerms,
+      }));
 
     res.json({ success: true, rates, shipmentId: shipment.objectId });
   } catch (error) {

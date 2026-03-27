@@ -150,128 +150,221 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
   const isShipping = deliveryMethod === 'shipping';
   const userId = currentUser?.id?.uuid;
 
+  const sellerId = listing?.author?.id?.uuid;
+
   useEffect(() => {
     if (!isShipping || !hasPackageData) return;
 
-    const sellerAddress = pub_shipFrom || {
-      name: 'Seller',
-      street1: '215 Clayton St',
-      city: 'San Francisco',
-      state: 'CA',
-      zip: '94117',
-      country: 'US',
-    };
-
-    const fetchRates = async addressTo => {
-      setLoading(true);
-      setFailed(false);
+    const run = async () => {
+      // Step 1: Fetch the seller's real ship-from address via the Integration API
+      let sellerAddress;
       try {
-        const payload = {
-          addressFrom: sellerAddress,
-          addressTo,
-          parcel: {
-            weight: pub_packageWeight,
-            mass_unit: pub_packageWeightUnit,
-            length: pub_packageLength,
-            width: pub_packageWidth,
-            height: pub_packageHeight,
-            distance_unit: pub_packageDistanceUnit,
-          },
-        };
-        console.log('ShippingRatesMaybe payload:', JSON.stringify(payload, null, 2));
-        const res = await fetch('/api/shippo-rates', {
+        const locRes = await fetch('/api/seller-location', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ sellerId }),
         });
-        const data = await res.json();
-        if (data.rates && data.rates.length > 0) {
-          const byPrice = [...data.rates].sort(
-            (a, b) => parseFloat(a.amount) - parseFloat(b.amount)
-          );
-          const bySpeed = [...data.rates].sort(
-            (a, b) => (a.estimatedDays || 999) - (b.estimatedDays || 999)
-          );
-          const economy = byPrice[0];
-          const express = bySpeed[0];
-          const standard = byPrice[Math.floor(byPrice.length / 2)];
-          setRateTiers({ economy, standard, express });
-          setSelectedTier('economy');
-          formApi.change('shippingRate', {
-            tier: 'economy',
-            ...economy,
-            displayAmount: applyMarkup(parseFloat(economy.amount)),
-          });
-        } else {
-          setFailed(true);
-        }
+        const locData = await locRes.json();
+        sellerAddress = locData.success && locData.address ? locData.address : null;
       } catch (e) {
-        setFailed(true);
-      } finally {
-        setLoading(false);
+        sellerAddress = null;
       }
-    };
+      // Fallback if seller-location call fails or returns nothing
+      if (!sellerAddress) {
+        sellerAddress = {
+          name: 'Seller',
+          street1: '215 Clayton St',
+          city: 'San Francisco',
+          state: 'CA',
+          zip: '94117',
+          country: 'US',
+        };
+      }
 
-    const privateData = currentUser?.attributes?.profile?.privateData || {};
-    const { streetAddress, city, stateProvince, postalCode, country } = privateData;
-    const hasAddress = streetAddress && city && postalCode;
+      // Step 2: Fetch Shippo rates with the resolved seller address
+      const fetchRates = async addressTo => {
+        setLoading(true);
+        setFailed(false);
+        try {
+          const payload = {
+            addressFrom: sellerAddress,
+            addressTo,
+            parcel: {
+              weight: pub_packageWeight,
+              mass_unit: pub_packageWeightUnit,
+              length: pub_packageLength,
+              width: pub_packageWidth,
+              height: pub_packageHeight,
+              distance_unit: pub_packageDistanceUnit,
+            },
+          };
+          console.log('ShippingRatesMaybe payload:', JSON.stringify(payload, null, 2));
+          const res = await fetch('/api/shippo-rates', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (data.rates && data.rates.length > 0) {
+            // Fetch FX rates to convert any non-USD amounts to USD
+            let fxRates = null;
+            try {
+              const fxRes = await fetch('/api/fx-rates');
+              const fxData = await fxRes.json();
+              fxRates = fxData.rates || null;
+            } catch (e) {
+              // proceed without conversion if FX fetch fails
+            }
 
-    if (hasAddress) {
-      setUsingGeo(false);
-      fetchRates({
-        name: 'Buyer',
-        street1: streetAddress,
-        city,
-        state: stateProvince || '',
-        zip: postalCode,
-        country: country || 'US',
-      });
-    } else {
-      fetch('/api/geolocate')
-        .then(r => r.json())
-        .then(geoData => {
-          const { countryCode, region, city } = geoData;
-          const country = countryCode || 'US';
-          const noLocation = !city && !region;
+            const toUSD = (amount, currency) => {
+              if (currency === 'USD' || !fxRates) return amount;
+              const usdRate = fxRates['USD'];
+              const srcRate = fxRates[currency];
+              if (!usdRate || !srcRate) return amount;
+              return amount * (usdRate / srcRate);
+            };
+
+            // Normalise all rates to USD amounts for sorting and display
+            const normalised = data.rates.map(rate => ({
+              ...rate,
+              amountUSD: toUSD(parseFloat(rate.amount), rate.currency),
+            }));
+
+            // Sort all rates cheapest first
+            const byPrice = [...normalised].sort((a, b) => a.amountUSD - b.amountUSD);
+
+            const cheapestOf = group =>
+              group.reduce((best, r) => (r.amountUSD < best.amountUSD ? r : best));
+
+            // Distinct estimatedDays values, ascending (fastest first)
+            const distinctDays = [
+              ...new Set(normalised.map(r => r.estimatedDays || 999)),
+            ].sort((a, b) => a - b);
+
+            let slots;
+
+            if (distinctDays.length === 1) {
+              // All same speed — show up to 3 cheapest distinct rates by price
+              const seen = new Set();
+              slots = byPrice
+                .filter(r => {
+                  if (seen.has(r.rateId)) return false;
+                  seen.add(r.rateId);
+                  return true;
+                })
+                .slice(0, 3);
+            } else {
+              const fastestDays = distinctDays[0];
+              const slowestDays = distinctDays[distinctDays.length - 1];
+
+              const slowestGroup = normalised.filter(r => (r.estimatedDays || 999) === slowestDays);
+              const fastestGroup = normalised.filter(r => (r.estimatedDays || 999) === fastestDays);
+
+              const picked = [cheapestOf(slowestGroup)];
+
+              if (distinctDays.length === 2) {
+                picked.push(cheapestOf(fastestGroup));
+              } else {
+                const middleGroup = normalised.filter(r => {
+                  const d = r.estimatedDays || 999;
+                  return d > fastestDays && d < slowestDays;
+                });
+                picked.push(cheapestOf(middleGroup));
+                picked.push(cheapestOf(fastestGroup));
+              }
+
+              // Dedup by rateId, then sort cheapest first
+              const seen = new Set();
+              slots = picked
+                .filter(r => {
+                  if (seen.has(r.rateId)) return false;
+                  seen.add(r.rateId);
+                  return true;
+                })
+                .sort((a, b) => a.amountUSD - b.amountUSD);
+            }
+
+            setRateTiers(slots);
+            setSelectedTier(slots[0].rateId);
+            formApi.change('shippingRate', {
+              ...slots[0],
+              displayAmount: applyMarkup(slots[0].amountUSD),
+            });
+          } else {
+            setFailed(true);
+          }
+        } catch (e) {
+          setFailed(true);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      // Step 3: Build addressTo from saved address or IP geolocation
+      const privateData = currentUser?.attributes?.profile?.privateData || {};
+      const { streetAddress, city, stateProvince, postalCode, country } = privateData;
+      const hasAddress = streetAddress && city && postalCode;
+
+      if (hasAddress) {
+        setUsingGeo(false);
+        await fetchRates({
+          name: 'Buyer',
+          street1: streetAddress,
+          city,
+          state: stateProvince || '',
+          zip: postalCode,
+          country: country || 'US',
+        });
+      } else {
+        try {
+          const geoRes = await fetch('/api/geolocate');
+          const geoData = await geoRes.json();
+          const { countryCode, region, city: geoCity } = geoData;
+          const geoCountry = countryCode || 'US';
+          const noLocation = !geoCity && !region;
 
           // Fallbacks for localhost/dev where IP geolocation returns null
           const COUNTRY_FALLBACKS = {
-            US: { city: 'Chicago', state: 'IL', zip: '60601' },
-            CA: { city: 'Toronto', state: 'ON', zip: 'M5V 3A8' },
-            GB: { city: 'London', state: '', zip: '' },
-            AU: { city: 'Sydney', state: 'NSW', zip: '' },
-            DE: { city: 'Berlin', state: '', zip: '' },
-            FR: { city: 'Paris', state: '', zip: '' },
-            JP: { city: 'Tokyo', state: '', zip: '' },
-            CN: { city: 'Beijing', state: '', zip: '' },
-            KR: { city: 'Seoul', state: '', zip: '' },
-            MX: { city: 'Mexico City', state: '', zip: '' },
-            BR: { city: 'Brasilia', state: '', zip: '' },
-            IN: { city: 'New Delhi', state: '', zip: '' },
-            SG: { city: 'Singapore', state: '', zip: '' },
-            HK: { city: 'Hong Kong', state: '', zip: '' },
-            NL: { city: 'Amsterdam', state: '', zip: '' },
-            IT: { city: 'Rome', state: '', zip: '' },
-            ES: { city: 'Madrid', state: '', zip: '' },
+            US: { city: 'Chicago',     state: 'IL',  zip: '60601' },
+            CA: { city: 'Toronto',     state: 'ON',  zip: 'M5V 3A8' },
+            GB: { city: 'London',      state: '',    zip: '' },
+            AU: { city: 'Sydney',      state: 'NSW', zip: '' },
+            DE: { city: 'Berlin',      state: '',    zip: '' },
+            FR: { city: 'Paris',       state: '',    zip: '' },
+            JP: { city: 'Tokyo',       state: '',    zip: '' },
+            CN: { city: 'Beijing',     state: '',    zip: '' },
+            KR: { city: 'Seoul',       state: '',    zip: '' },
+            MX: { city: 'Mexico City', state: '',    zip: '' },
+            BR: { city: 'Brasilia',    state: '',    zip: '' },
+            IN: { city: 'New Delhi',   state: '',    zip: '' },
+            SG: { city: 'Singapore',   state: '',    zip: '' },
+            HK: { city: 'Hong Kong',   state: '',    zip: '' },
+            NL: { city: 'Amsterdam',   state: '',    zip: '' },
+            IT: { city: 'Rome',        state: '',    zip: '' },
+            ES: { city: 'Madrid',      state: '',    zip: '' },
           };
 
           const fallback = noLocation
-            ? COUNTRY_FALLBACKS[country] || { city: '', state: '', zip: '' }
+            ? COUNTRY_FALLBACKS[geoCountry] || { city: '', state: '', zip: '' }
             : null;
 
           setUsingGeo(true);
-          fetchRates({
+          await fetchRates({
             name: 'Buyer',
             street1: '',
-            city: fallback ? fallback.city : city,
+            city: fallback ? fallback.city : geoCity,
             state: fallback ? fallback.state : region || '',
             zip: fallback ? fallback.zip : '',
-            country,
+            country: geoCountry,
           });
-        })
-        .catch(() => setFailed(true));
-    }
-  }, [isShipping, userId]);
+        } catch (e) {
+          setFailed(true);
+        }
+      }
+    };
+
+    run();
+  }, [isShipping, userId, sellerId]);
 
   if (!isShipping || !hasPackageData) return null;
 
@@ -291,22 +384,24 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
     );
   }
 
-  if (!rateTiers) return null;
+  if (!rateTiers || rateTiers.length === 0) return null;
 
-  const tiers = [
-    { key: 'economy', label: 'Economy', rate: rateTiers.economy },
-    { key: 'standard', label: 'Standard', rate: rateTiers.standard },
-    { key: 'express', label: 'Express', rate: rateTiers.express },
-  ];
+  const CARRIER_ABBREV = {
+    'Canada Post': 'CP',
+    'UPS': 'UPS',
+    'USPS': 'USPS',
+    'FedEx': 'FedEx',
+    'DHL Express': 'DHL',
+  };
+  const abbrevCarrier = name => CARRIER_ABBREV[name] || (name ? name.split(' ')[0] : name);
 
   const handleTierChange = e => {
-    const tier = e.target.value;
-    setSelectedTier(tier);
-    const rate = rateTiers[tier];
+    const rateId = e.target.value;
+    setSelectedTier(rateId);
+    const rate = rateTiers.find(r => r.rateId === rateId);
     formApi.change('shippingRate', {
-      tier,
       ...rate,
-      displayAmount: applyMarkup(parseFloat(rate.amount)),
+      displayAmount: applyMarkup(rate.amountUSD),
     });
   };
 
@@ -314,13 +409,15 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
     <div className={css.shippingRates}>
       <label className={css.shippingRatesLabel}>Shipping</label>
       <select className={css.shippingRatesSelect} value={selectedTier} onChange={handleTierChange}>
-        {tiers.map(({ key, label, rate }) => {
-          const price = applyMarkup(parseFloat(rate.amount));
-          const days = rate.estimatedDays ? ` (${rate.estimatedDays} days)` : '';
+        {rateTiers.map(rate => {
+          const price = applyMarkup(rate.amountUSD);
+          const carrier = abbrevCarrier(rate.carrier);
+          const days = rate.estimatedDays
+            ? `${rate.estimatedDays} day${rate.estimatedDays === 1 ? '' : 's'}`
+            : 'Est. time varies';
           return (
-            <option key={key} value={key}>
-              {label}
-              {days} — ${price.toFixed(2)} {rate.currency}
+            <option key={rate.rateId} value={rate.rateId}>
+              {carrier} {rate.service} — {days} — ${price.toFixed(2)}
             </option>
           );
         })}
