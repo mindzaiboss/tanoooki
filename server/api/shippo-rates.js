@@ -408,6 +408,7 @@ module.exports = async (req, res) => {
     const SERVICE_BLOCKLIST = [
       { carrier: 'Canada Post', serviceContains: 'Regular Parcel' },
       { carrier: 'Canada Post', serviceContains: 'Lettermail' },
+      { carrier: 'Canada Post', serviceContains: 'Small Packet USA Air' },
       { carrier: 'UPS', serviceContains: 'Ground Saver' },
       { carrier: 'UPS', serviceContains: 'Ground' },
     ];
@@ -419,8 +420,12 @@ module.exports = async (req, res) => {
           rate.servicelevel.name.includes(entry.serviceContains)
       );
 
+    const isCaToUs =
+      resolvedAddressFrom.country === 'CA' && resolvedAddressTo.country === 'US';
+
     const rates = shipment.rates
       .filter(rate => !isBlocked(rate))
+      .filter(rate => !(isCaToUs && rate.provider === 'Canada Post'))
       .map(rate => ({
         rateId: rate.objectId,
         carrier: rate.provider,

@@ -130,6 +130,7 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
   const [failed, setFailed] = useState(false);
   const [usingGeo, setUsingGeo] = useState(false);
   const [selectedTier, setSelectedTier] = useState('economy');
+  const [isCrossBorder, setIsCrossBorder] = useState(false);
 
   const currentUser = useSelector(state => state.user.currentUser);
 
@@ -307,6 +308,7 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
 
       if (hasAddress) {
         setUsingGeo(false);
+        setIsCrossBorder((country || 'US') !== sellerAddress.country);
         await fetchRates({
           name: 'Buyer',
           street1: streetAddress,
@@ -349,6 +351,7 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
             : null;
 
           setUsingGeo(true);
+          setIsCrossBorder(geoCountry !== sellerAddress.country);
           await fetchRates({
             name: 'Buyer',
             street1: '',
@@ -425,6 +428,16 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
       {usingGeo ? (
         <p className={css.shippingRatesDisclaimer}>
           Estimated shipping based on your location. Sign up or add your address for exact rates.
+        </p>
+      ) : null}
+      {isCrossBorder ? (
+        <p className={css.shippingRatesDisclaimer}>
+          <span
+            className={css.tariffDisclaimer}
+            title="Import duties and taxes are not included in the shipping cost and are the buyer's responsibility. Please check with your country's customs office for more information."
+          >
+            ⚠️ Import duties may apply
+          </span>
         </p>
       ) : null}
     </div>

@@ -124,6 +124,16 @@
   margin-bottom: 0;
 }
 
+.tariffDisclaimer {
+  composes: marketplaceTinyFontStyles from global;
+  color: var(--colorGrey500);
+  margin-top: 6px;
+  margin-bottom: 0;
+  display: inline-block;
+  border-bottom: 1px dashed var(--colorGrey400);
+  cursor: help;
+}
+
 .shippingRatesLoading {
   composes: marketplaceTinyFontStyles from global;
   color: var(--colorGrey500);
