@@ -135,3 +135,16 @@
   color: var(--colorGrey500);
   margin: 0;
 }
+
+.shippingRatesTariffWarning {
+  font-size: 12px;
+  color: #b45309;
+  margin: 4px 0 0 0;
+  padding: 0;
+}
+
+.shippingRatesTooltipAnchor {
+  text-decoration: underline;
+  cursor: help;
+  color: inherit;
+}

@@ -18,7 +18,7 @@ const { Money } = sdkTypes;
 const BILLIARD = 1000000000000000;
 
 const getListingTypeConfig = (publicData, listingTypes) => {
-  const selectedListingType = publicData.listingType;
+  const selectedListingType = publicData?.listingType;
   return listingTypes.find(conf => conf.listingType === selectedListingType);
 };
 
@@ -70,6 +70,12 @@ const getInitialValues = props => {
  * @returns {JSX.Element}
  */
 const EditListingPricingAndStockPanel = props => {
+  console.log('EditListingPricingAndStockPanel props:', {
+    listing: props.listing,
+    hasListing: !!props.listing,
+    listingAttributes: props.listing?.attributes,
+  });
+
   // State is needed since re-rendering would overwrite the values during XHR call.
   const [state, setState] = useState({ initialValues: getInitialValues(props) });
 
@@ -96,9 +102,9 @@ const EditListingPricingAndStockPanel = props => {
 
   // Form needs to know data from listingType
   const publicData = listing?.attributes?.publicData;
-  const unitType = publicData.unitType;
+  const unitType = publicData?.unitType;
   const listingTypeConfig = getListingTypeConfig(publicData, listingTypes);
-  const transactionProcessAlias = listingTypeConfig.transactionType.alias;
+  const transactionProcessAlias = listingTypeConfig?.transactionType?.alias;
 
   const hasInfiniteStock = STOCK_INFINITE_ITEMS.includes(listingTypeConfig?.stockType);
 
@@ -145,6 +151,7 @@ const EditListingPricingAndStockPanel = props => {
           className={css.form}
           initialValues={initialValues}
           onSubmit={values => {
+            console.log('PRICING PANEL onSubmit called with values:', values);
             const { price, stock, stockTypeInfinity } = values;
 
             // Update stock only if the value has changed, or stock is infinity in stockType,
@@ -176,6 +183,10 @@ const EditListingPricingAndStockPanel = props => {
 
             // New values for listing attributes
             const updateValues = {
+              id: listing?.id,
+              title: listing?.attributes?.title,
+              description: listing?.attributes?.description,
+              publicData: listing?.attributes?.publicData,
               price,
               ...stockUpdateMaybe,
             };

@@ -13,7 +13,14 @@ const geolocate = require('./api/geolocate');
 
 const shippoRates = require('./api/shippo-rates');
 
+const validateAddress = require('./api/validate-address');
+
 const sellerLocation = require('./api/seller-location');
+
+// Shopify API routes
+const createProduct = require('./api/shopify/create-product');
+const updateProduct = require('./api/shopify/update-product');
+const publishProduct = require('./api/shopify/publish-product');
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -73,6 +80,12 @@ router.get('/fx-rates', fxRates);
 router.get('/geolocate', geolocate);
 router.post('/shippo-rates', shippoRates);
 router.post('/seller-location', sellerLocation);
+router.post('/validate-address', validateAddress);
+
+// Shopify API endpoints
+router.post('/shopify/create-product', createProduct);
+router.post('/shopify/update-product', updateProduct);
+router.post('/shopify/publish-product', publishProduct);
 
 // Create user with identity provider (e.g. Facebook or Google)
 // This endpoint is called to create a new user after user has confirmed

@@ -39,7 +39,7 @@ const getInitialValues = props => {
     pub_packageWidth,
     pub_packageHeight,
     pub_packageDistanceUnit,
-  } = publicData;
+  } = publicData || {};
   const deliveryOptions = [];
 
   if (shippingEnabled || (!displayMultipleDelivery && displayShipping)) {
@@ -194,7 +194,7 @@ const EditListingDeliveryPanel = props => {
               packageDistanceUnit,
             },
           });
-          onSubmit(updateValues);
+          return onSubmit(updateValues);
         }}
         listingTypeConfig={listingTypeConfig}
         marketplaceCurrency={marketplaceCurrency}

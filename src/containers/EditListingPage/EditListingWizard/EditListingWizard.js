@@ -294,8 +294,9 @@ const tabsActive = (isNew, listing, tabs, config) => {
     const validTab = previousTabIndex >= 0;
     const hasListingType = !!listing?.attributes?.publicData?.listingType;
     const prevTabComletedInNewFlow = tabCompleted(tabs[previousTabIndex], listing, config);
-    const isActive =
-      validTab && !isNew ? hasListingType : validTab && isNew ? prevTabComletedInNewFlow : true;
+    // Disable Sharetribe's tab validation model — we're moving to Shopify backend
+    // where listing state is managed differently; allow free navigation between all wizard tabs.
+    const isActive = true; // Disable tab validation - allow free navigation between all wizard tabs
     return { ...acc, [tab]: isActive };
   }, {});
 };
@@ -445,6 +446,7 @@ class EditListingWizard extends Component {
   }
 
   handlePublishListing(id) {
+    console.log('handlePublishListing called with id:', id);
     const { onPublishListingDraft, currentUser, stripeAccount, listing, config } = this.props;
 
     // Block publish if shipping is enabled but package dimensions are missing
@@ -457,8 +459,9 @@ class EditListingWizard extends Component {
         return;
       }
     }
+    console.log('Package dimensions check passed');
     this.setState({ missingDimensionsError: false });
-    const processName = listing?.attributes?.publicData?.transactionProcessAlias.split('/')[0];
+    const processName = listing?.attributes?.publicData?.transactionProcessAlias?.split('/')[0];
     const isInquiryProcess = processName === INQUIRY_PROCESS_NAME;
 
     const listingTypeConfig = getListingTypeConfig(listing, this.state.selectedListingType, config);
@@ -474,18 +477,10 @@ class EditListingWizard extends Component {
       (hasRequirements(stripeAccountData, 'past_due') ||
         hasRequirements(stripeAccountData, 'currently_due'));
 
-    if (
-      isInquiryProcess ||
-      !isPayoutDetailsRequired ||
-      (stripeConnected && !stripeRequirementsMissing)
-    ) {
-      onPublishListingDraft(id);
-    } else {
-      this.setState({
-        draftId: id,
-        showPayoutDetails: true,
-      });
-    }
+    // Bypass Stripe Connect validation — Tanoooki handles payments through Shopify.
+    console.log('About to call onPublishListingDraft');
+    console.log('Calling onPublishListingDraft with id:', id);
+    onPublishListingDraft(id);
   }
 
   handlePayoutModalClose() {

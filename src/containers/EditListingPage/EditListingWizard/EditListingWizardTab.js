@@ -53,24 +53,33 @@ const pathParamsToNextTab = (params, tab, marketplaceTabs) => {
 
 // When user has update draft listing, he should be redirected to next EditListingWizardTab
 const redirectAfterDraftUpdate = (listingId, params, tab, marketplaceTabs, history, routes) => {
+  console.log('redirectAfterDraftUpdate called:', { listingId, params, tab });
+  console.log('history object:', history, 'hasReplace:', typeof history?.replace, 'hasPush:', typeof history?.push);
+
   const listingUUID = listingId.uuid;
-  const currentPathParams = {
+
+  // Build next tab params with draft type and new ID
+  const nextTabIndex = marketplaceTabs.findIndex(s => s === tab) + 1;
+  const nextTab = nextTabIndex < marketplaceTabs.length
+    ? marketplaceTabs[nextTabIndex]
+    : marketplaceTabs[marketplaceTabs.length - 1];
+
+  const nextPathParams = {
     ...params,
     type: LISTING_PAGE_PARAM_TYPE_DRAFT,
     id: listingUUID,
+    tab: nextTab,
   };
 
-  // Replace current "new" path to "draft" path.
-  // Browser's back button should lead to editing current draft instead of creating a new one.
-  if (params.type === LISTING_PAGE_PARAM_TYPE_NEW) {
-    const draftURI = createResourceLocatorString('EditListingPage', routes, currentPathParams, {});
-    history.replace(draftURI);
-  }
-
-  // Redirect to next tab
-  const nextPathParams = pathParamsToNextTab(currentPathParams, tab, marketplaceTabs);
   const to = createResourceLocatorString('EditListingPage', routes, nextPathParams, {});
-  history.push(to);
+  console.log('Pushing directly to next tab:', to, 'nextPathParams:', nextPathParams);
+
+  // Use replace if coming from 'new', otherwise push
+  if (params.type === LISTING_PAGE_PARAM_TYPE_NEW) {
+    history.replace(to);
+  } else {
+    history.push(to);
+  }
 };
 
 /**
@@ -115,6 +124,9 @@ const EditListingWizardTab = props => {
     intl,
   } = props;
 
+  console.log('EditListingWizardTab rendering with tab:', tab);
+  console.log('Available marketplaceTabs:', marketplaceTabs);
+
   const { type } = params;
   const isNewURI = type === LISTING_PAGE_PARAM_TYPE_NEW;
   const isDraftURI = type === LISTING_PAGE_PARAM_TYPE_DRAFT;
@@ -125,7 +137,15 @@ const EditListingWizardTab = props => {
   // New listing flow has automatic redirects to new tab on the wizard
   // and the last panel calls publishListing API endpoint.
   const automaticRedirectsForNewListingFlow = (tab, listingId) => {
+    console.log('automaticRedirectsForNewListingFlow called:', {
+      tab,
+      listingId,
+      lastTab: marketplaceTabs[marketplaceTabs.length - 1],
+      isLastTab: tab === marketplaceTabs[marketplaceTabs.length - 1],
+    });
+
     if (tab !== marketplaceTabs[marketplaceTabs.length - 1]) {
+      console.log('Redirecting to next tab after draft update');
       // Create listing flow: smooth scrolling polyfill to scroll to correct tab
       handleCreateFlowTabScrolling(false);
 
@@ -139,16 +159,18 @@ const EditListingWizardTab = props => {
         routeConfiguration
       );
     } else {
+      console.log('Last tab reached, calling handlePublishListing');
       handlePublishListing(listingId);
     }
   };
 
   const onCompleteEditListingWizardTab = (tab, updateValues) => {
-    const onUpdateListingOrCreateListingDraft = isNewURI
+    const hasDraftId = !!currentListing.id;
+    const onUpdateListingOrCreateListingDraft = !hasDraftId
       ? (tab, values) => onCreateListingDraft(values, config)
       : (tab, values) => onUpdateListing(tab, values, config);
 
-    const updateListingValues = isNewURI
+    const updateListingValues = !hasDraftId
       ? updateValues
       : { ...updateValues, id: currentListing.id };
 
@@ -167,6 +189,13 @@ const EditListingWizardTab = props => {
   };
 
   const panelProps = tab => {
+    console.log('panelProps called:', {
+      tab,
+      listing,
+      hasListing: !!listing,
+      listingId: listing?.id,
+    });
+
     return {
       className: css.panel,
       errors,

@@ -2,6 +2,55 @@ const { Shippo } = require('shippo');
 
 const shippo = new Shippo({ apiKeyHeader: process.env.SHIPPO_API_KEY });
 
+// ---------------------------------------------------------------------------
+// Carrier accounts by ORIGIN country
+// DHL Express is the universal fallback for any unlisted country or route
+// ---------------------------------------------------------------------------
+const DHL = 'd9a54cc0c85140cfb4773f8516d28915';
+
+const CARRIER_ACCOUNTS_BY_COUNTRY = {
+  CA: [
+    '593a940031554e009ddf8068a66a6b47', // UPS Canada
+    'a7e659b3218c49c182140d682b98f937', // Canada Post
+    DHL,
+  ],
+  US: [
+    '670f42fd1c594430926357ee1739c4f1', // UPS US
+    'f5fad08c7b1a4576b883398d5a1e8225', // USPS
+    DHL,
+  ],
+  GB: [
+    'cf2f0ddf3fb046aaabfdc0f93ec4d487', // Evri UK
+    'd7f9e16b7ace4ce09b86a87890e2b521', // DPD UK
+    DHL,
+  ],
+  AU: [
+    'd9b161767e45415fa21c05d3c8d7517c', // Sendle
+    'b8fe56bc9c6941879c57984b4e5b6fd8', // CouriersPlease
+    DHL,
+  ],
+  DE: [
+    '3791410183d24e03a384743f5c883515', // Deutsche Post
+    '74d55e3c9d1c4f39b9004776158faf5b', // DPD DE
+    DHL,
+  ],
+  FR: [
+    '9567e2c357234436b4a7ab58ba3f5709', // Chronopost
+    '8175973efc28499ba6552e6c618e36b3', // Colissimo
+    DHL,
+  ],
+  // Asia-Pacific: DHL only (most reliable for these origins)
+  JP: [DHL],
+  CN: [DHL],
+  KR: [DHL],
+  TH: [DHL],
+  HK: [DHL],
+  SG: [DHL],
+};
+
+// Fallback for any unlisted origin country
+const DEFAULT_CARRIERS = [DHL];
+
 const PROVINCE_STATE_CODES = {
   'Alberta': 'AB', 'British Columbia': 'BC', 'Manitoba': 'MB',
   'New Brunswick': 'NB', 'Newfoundland and Labrador': 'NL',
@@ -27,31 +76,6 @@ const normalizeState = (state) => {
   if (!state) return '';
   if (state.length <= 3) return state.toUpperCase();
   return PROVINCE_STATE_CODES[state] || state;
-};
-
-const CARRIER_ACCOUNTS_BY_COUNTRY = {
-  CA: [
-    '593a940031554e009ddf8068a66a6b47', // UPS Canada
-    'a7e659b3218c49c182140d682b98f937', // Canada Post
-    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
-  ],
-  US: [
-    '670f42fd1c594430926357ee1739c4f1', // UPS US
-    'f5fad08c7b1a4576b883398d5a1e8225', // USPS
-    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
-  ],
-  GB: [
-    'cf2f0ddf3fb046aaabfdc0f93ec4d487', // Evri UK
-    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
-  ],
-  AU: [
-    'd9b161767e45415fa21c05d3c8d7517c', // Sendle
-    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
-  ],
-  DE: [
-    '3791410183d24e03a384743f5c883515', // Deutsche Post
-    'd9a54cc0c85140cfb4773f8516d28915', // DHL Express
-  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -143,8 +167,7 @@ const CITY_FALLBACK_ADDRESSES = {
   'liverpool':         { street1: '1 Dale St',                       zip: 'L2 2DH' },
   'manchester':        { street1: '1 Albert Square',                 zip: 'M2 5DB' },
   // Note: 'london' key is under GB but conflicts with 'london' ON — the city lookup
-  // is only used when we already have a country, so it's safe. We add a gb-specific
-  // entry via the province/country tier instead.
+  // is only used when we already have a country, so it's safe.
   // --- Japan ---
   'fukuoka':           { street1: '1-8-1 Tenjin, Chuo-ku',          zip: '810-0001' },
   'kyoto':             { street1: '488 Kamimonzen-cho, Higashiyama', zip: '605-0073' },
@@ -251,24 +274,24 @@ const PROVINCE_STATE_CAPITAL_ADDRESSES = {
 // Tier 3: Country capital (country code → { city, state, street1, zip })
 // ---------------------------------------------------------------------------
 const COUNTRY_CAPITAL_ADDRESSES = {
-  US: { city: 'Chicago',      state: 'IL',  street1: '121 N LaSalle St',            zip: '60602' },
-  CA: { city: 'Toronto',      state: 'ON',  street1: '220 Yonge St',                zip: 'M5B 2H1' },
+  US: { city: 'Chicago',      state: 'IL',  street1: '121 N LaSalle St',             zip: '60602' },
+  CA: { city: 'Toronto',      state: 'ON',  street1: '220 Yonge St',                 zip: 'M5B 2H1' },
   JP: { city: 'Tokyo',        state: '',    street1: '2-7-1 Marunouchi, Chiyoda-ku', zip: '100-0005' },
-  CN: { city: 'Beijing',      state: '',    street1: '1 East Chang An Avenue',       zip: '100738' },
-  KR: { city: 'Seoul',        state: '',    street1: '110 Sejong-daero, Jung-gu',    zip: '04524' },
-  TH: { city: 'Bangkok',      state: '',    street1: '173 Dinso Rd, Phra Nakhon',   zip: '10200' },
-  AU: { city: 'Sydney',       state: 'NSW', street1: '456 Kent St',                 zip: '2000' },
-  GB: { city: 'London',       state: '',    street1: '10 Downing St',               zip: 'SW1A 2AA' },
-  HK: { city: 'Hong Kong',    state: '',    street1: '1 Tim Mei Ave, Tamar',        zip: '' },
-  SG: { city: 'Singapore',    state: '',    street1: '1 Parliament Place',          zip: '178880' },
-  DE: { city: 'Berlin',       state: '',    street1: 'Unter den Linden 77',         zip: '10117' },
-  FR: { city: 'Paris',        state: '',    street1: '29 Rue de Rivoli',            zip: '75004' },
-  NL: { city: 'Amsterdam',    state: '',    street1: 'Amstel 1',                    zip: '1011 PN' },
-  IT: { city: 'Rome',         state: '',    street1: 'Piazza del Campidoglio 1',    zip: '00186' },
-  ES: { city: 'Madrid',       state: '',    street1: 'Plaza de la Villa 1',         zip: '28005' },
-  MX: { city: 'Mexico City',  state: '',    street1: 'Plaza de la Constitución 1',  zip: '06010' },
-  BR: { city: 'Brasilia',     state: '',    street1: 'Praça dos Três Poderes',      zip: '70150-900' },
-  IN: { city: 'New Delhi',    state: '',    street1: '1 Rajpath',                   zip: '110001' },
+  CN: { city: 'Beijing',      state: '',    street1: '1 East Chang An Avenue',        zip: '100738' },
+  KR: { city: 'Seoul',        state: '',    street1: '110 Sejong-daero, Jung-gu',     zip: '04524' },
+  TH: { city: 'Bangkok',      state: '',    street1: '173 Dinso Rd, Phra Nakhon',    zip: '10200' },
+  AU: { city: 'Sydney',       state: 'NSW', street1: '456 Kent St',                  zip: '2000' },
+  GB: { city: 'London',       state: '',    street1: '10 Downing St',                zip: 'SW1A 2AA' },
+  HK: { city: 'Hong Kong',    state: '',    street1: '1 Tim Mei Ave, Tamar',         zip: '' },
+  SG: { city: 'Singapore',    state: '',    street1: '1 Parliament Place',           zip: '178880' },
+  DE: { city: 'Berlin',       state: '',    street1: 'Unter den Linden 77',          zip: '10117' },
+  FR: { city: 'Paris',        state: '',    street1: '29 Rue de Rivoli',             zip: '75004' },
+  NL: { city: 'Amsterdam',    state: '',    street1: 'Amstel 1',                     zip: '1011 PN' },
+  IT: { city: 'Rome',         state: '',    street1: 'Piazza del Campidoglio 1',     zip: '00186' },
+  ES: { city: 'Madrid',       state: '',    street1: 'Plaza de la Villa 1',          zip: '28005' },
+  MX: { city: 'Mexico City',  state: '',    street1: 'Plaza de la Constitución 1',   zip: '06010' },
+  BR: { city: 'Brasilia',     state: '',    street1: 'Praça dos Três Poderes',       zip: '70150-900' },
+  IN: { city: 'New Delhi',    state: '',    street1: '1 Rajpath',                    zip: '110001' },
 };
 
 // ---------------------------------------------------------------------------
@@ -352,6 +375,14 @@ module.exports = async (req, res) => {
       );
     }
 
+    const originCountry = resolvedAddressFrom.country;
+    const destCountry = resolvedAddressTo.country;
+    const isCaToUs = originCountry === 'CA' && destCountry === 'US';
+    const isUsToUs = originCountry === 'US' && destCountry === 'US';
+    const isCaToCa = originCountry === 'CA' && destCountry === 'CA';
+    const isDomestic = originCountry === destCountry;
+    const carrierAccounts = CARRIER_ACCOUNTS_BY_COUNTRY[originCountry] || DEFAULT_CARRIERS;
+
     const shipment = await shippo.shipments.create({
       addressFrom: {
         name: resolvedAddressFrom.name || 'Seller',
@@ -360,7 +391,7 @@ module.exports = async (req, res) => {
         city: resolvedAddressFrom.city,
         state: resolvedAddressFrom.state,
         zip: resolvedAddressFrom.zip,
-        country: resolvedAddressFrom.country,
+        country: originCountry,
       },
       addressTo: {
         name: resolvedAddressTo.name || 'Buyer',
@@ -369,7 +400,7 @@ module.exports = async (req, res) => {
         city: resolvedAddressTo.city,
         state: resolvedAddressTo.state,
         zip: resolvedAddressTo.zip,
-        country: resolvedAddressTo.country,
+        country: destCountry,
       },
       parcels: [{
         length: String(resolvedParcel.length),
@@ -380,8 +411,8 @@ module.exports = async (req, res) => {
         massUnit: resolvedParcel.mass_unit || resolvedParcel.massUnit,
       }],
       async: false,
-      carrierAccounts: CARRIER_ACCOUNTS_BY_COUNTRY[resolvedAddressFrom.country] || undefined,
-      ...(resolvedAddressFrom.country !== resolvedAddressTo.country ? {
+      carrierAccounts,
+      ...(!isDomestic ? {
         customsDeclaration: {
           contentsType: 'MERCHANDISE',
           contentsExplanation: 'Collectible toy figure',
@@ -395,7 +426,7 @@ module.exports = async (req, res) => {
             massUnit: resolvedParcel.massUnit || resolvedParcel.mass_unit || 'lb',
             valueAmount: '50',
             valueCurrency: 'USD',
-            originCountry: resolvedAddressFrom.country,
+            originCountry,
           }],
         },
       } : {}),
@@ -404,20 +435,30 @@ module.exports = async (req, res) => {
     console.log('Shipment status:', shipment.status);
     console.log('Shipment messages:', JSON.stringify(shipment.messages, null, 2));
     console.log('Rates count:', shipment.rates?.length);
+    console.log('Route:', `${originCountry} → ${destCountry}`, '| Carriers:', carrierAccounts.length);
 
-    const SERVICE_BLOCKLIST = [
-      { carrier: 'Canada Post', serviceContains: 'Regular Parcel' },
-      { carrier: 'Canada Post', serviceContains: 'Lettermail' },
-      { carrier: 'UPS', serviceContains: 'Ground Saver' },
-      { carrier: 'UPS', serviceContains: 'Ground' },
-    ];
+    // ---------------------------------------------------------------------------
+    // Route-specific blocklist
+    // ---------------------------------------------------------------------------
+    const isBlocked = rate => {
+      const carrier = rate.provider;
+      const service = rate.servicelevel?.name || '';
 
-    const isBlocked = rate =>
-      SERVICE_BLOCKLIST.some(
-        entry =>
-          rate.provider === entry.carrier &&
-          rate.servicelevel.name.includes(entry.serviceContains)
-      );
+      // Always block lettermail / untracked services
+      if (carrier === 'Canada Post' && service.includes('Lettermail')) return true;
+      if (carrier === 'Canada Post' && service.includes('Regular Parcel')) return true;
+
+      // Always block UPS Ground Saver (no reliable ETA)
+      if (carrier === 'UPS' && service.includes('Ground Saver')) return true;
+
+      // Block ALL Canada Post on CA→US (tariff/DDU non-compliance)
+      if (isCaToUs && carrier === 'Canada Post') return true;
+
+      // Block UPS Ground on international routes only — fine for domestic
+      if (!isDomestic && carrier === 'UPS' && service === 'Ground') return true;
+
+      return false;
+    };
 
     const rates = shipment.rates
       .filter(rate => !isBlocked(rate))

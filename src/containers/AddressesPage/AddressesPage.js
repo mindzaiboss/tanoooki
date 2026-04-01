@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { compose } from 'redux';
 import { connect } from 'react-redux';
 
@@ -55,13 +55,98 @@ export const AddressesPageComponent = props => {
   const addressFields = userFields.filter(uf => addressFieldKeys.includes(uf.key));
   const userTypeConfig = userTypes.find(c => c.userType === userType);
 
-  const handleSubmit = values => {
+  const [validating, setValidating] = useState(false);
+  const [validationResult, setValidationResult] = useState(null);
+  const [pendingValues, setPendingValues] = useState(null);
+
+  // Internal save: transforms form values → profile shape → onUpdateProfile
+  const onSubmit = values => {
     const profile = {
       privateData: {
         ...pickUserFieldsData(values, 'private', userType, addressFields),
       },
     };
     onUpdateProfile(profile);
+  };
+
+  const handleSubmit = async (values) => {
+    setValidationResult(null);
+    setPendingValues(null);
+    setValidating(true);
+
+    try {
+      console.log('Validation payload values:', values);
+      const res = await fetch('/api/validate-address', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          street1: (values.priv_streetAddress || '').trim(),
+          street2: (values.priv_streetAddress2 || '').trim(),
+          city: (values.priv_city || '').trim(),
+          state: (values.priv_stateProvince || '').trim(),
+          zip: (values.priv_postalCode || '').trim(),
+          country: (values.priv_country || '').trim(),
+        }),
+      });
+      const data = await res.json();
+
+      // Guard: if server returned an error, show generic invalid state
+      if (!res.ok || data.error) {
+        setPendingValues(values);
+        setValidationResult({ isValid: false, hasSuggestion: false, messages: [{ text: data.error || 'Address validation failed. Please check your address and try again.' }] });
+        setValidating(false);
+        return;
+      }
+
+      if (data.hasSuggestion) {
+        setPendingValues(values);
+        setValidationResult(data);
+        setValidating(false);
+        return;
+      }
+
+      if (!data.isValid && !data.hasSuggestion) {
+        setPendingValues(values);
+        setValidationResult({ ...data, isWarningOnly: true });
+        setValidating(false);
+        return;
+      }
+
+      setValidating(false);
+      onSubmit({
+        ...values,
+        priv_streetAddress: (values.priv_streetAddress || '').trim(),
+        priv_streetAddress2: (values.priv_streetAddress2 || '').trim(),
+        priv_city: (values.priv_city || '').trim(),
+        priv_stateProvince: (values.priv_stateProvince || '').trim(),
+        priv_postalCode: (values.priv_postalCode || '').trim(),
+      });
+
+    } catch (e) {
+      // If validation API fails, allow save anyway
+      setValidating(false);
+      onSubmit(values);
+    }
+  };
+
+  const handleAcceptSuggestion = () => {
+    const s = validationResult.suggested;
+    onSubmit({
+      ...pendingValues,
+      priv_streetAddress: s.street1,
+      priv_streetAddress2: s.street2,
+      priv_city: s.city,
+      priv_stateProvince: s.state,
+      priv_postalCode: s.zip,
+    });
+    setValidationResult(null);
+    setPendingValues(null);
+  };
+
+  const handleKeepOriginal = () => {
+    onSubmit(pendingValues);
+    setValidationResult(null);
+    setPendingValues(null);
   };
 
   const title = intl.formatMessage({ id: 'AddressesPage.title' });
@@ -103,20 +188,80 @@ export const AddressesPageComponent = props => {
             <FormattedMessage id="AddressesPage.subtitle" />
           </p>
           {user.id ? (
-            <PrivateDetailsForm
-              className={css.form}
-              currentUser={currentUser}
-              initialValues={{
-                ...initialValuesForUserFields(privateData, 'private', userType, addressFields),
-              }}
-              updateProfileError={updateProfileError}
-              updateInProgress={updateProfileInProgress}
-              onSubmit={handleSubmit}
-              marketplaceName={config.marketplaceName}
-              userFields={addressFields}
-              userTypeConfig={userTypeConfig}
-              intl={intl}
-            />
+            <>
+              {validating && (
+                <p className={css.validating}>Validating address...</p>
+              )}
+
+              {validationResult && !validationResult.isValid && !validationResult.hasSuggestion && (
+                <div className={css.validationError}>
+                  <p>⚠️ We couldn't verify this address:</p>
+                  <ul>
+                    {(validationResult.messages || []).map((m, i) => (
+                      <li key={i}>{m.text}</li>
+                    ))}
+                  </ul>
+                  <div className={css.validationErrorActions}>
+                    <button
+                      type="button"
+                      className={css.saveAnywayButton}
+                      onClick={() => {
+                        onSubmit(pendingValues);
+                        setValidationResult(null);
+                        setPendingValues(null);
+                      }}
+                    >
+                      Save anyway
+                    </button>
+                    <span className={css.saveAnywayHint}>or correct your address above and save again</span>
+                  </div>
+                </div>
+              )}
+
+              {validationResult && validationResult.hasSuggestion && (
+                <div className={css.validationSuggestion}>
+                  <p>📬 Please double check your address. There might be an error. Here is a suggested correction for you to review:</p>
+                  <div className={css.suggestedAddress}>
+                    <strong>Suggested:</strong><br />
+                    {validationResult.suggested.street1}
+                    {validationResult.suggested.street2 ? `, ${validationResult.suggested.street2}` : ''}<br />
+                    {validationResult.suggested.city}, {validationResult.suggested.state} {validationResult.suggested.zip}<br />
+                    {validationResult.suggested.country}
+                  </div>
+                  <div className={css.suggestionActions}>
+                    <button
+                      type="button"
+                      className={css.acceptButton}
+                      onClick={handleAcceptSuggestion}
+                    >
+                      Use suggested address
+                    </button>
+                    <button
+                      type="button"
+                      className={css.keepButton}
+                      onClick={handleKeepOriginal}
+                    >
+                      Keep my address
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <PrivateDetailsForm
+                className={css.form}
+                currentUser={currentUser}
+                initialValues={{
+                  ...initialValuesForUserFields(privateData, 'private', userType, addressFields),
+                }}
+                updateProfileError={updateProfileError}
+                updateInProgress={updateProfileInProgress || validating}
+                onSubmit={handleSubmit}
+                marketplaceName={config.marketplaceName}
+                userFields={addressFields}
+                userTypeConfig={userTypeConfig}
+                intl={intl}
+              />
+            </>
           ) : null}
         </div>
       </LayoutSideNavigation>

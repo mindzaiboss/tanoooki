@@ -90,25 +90,40 @@ const sortExceptionsByStartTime = (a, b) => {
 // Show Listing //
 //////////////////
 export const showListingThunk = createAsyncThunk(
-  'EditListingPage/showListing',
-  ({ actionPayload, config }, { dispatch, rejectWithValue, extra: sdk }) => {
-    const imageVariantInfo = getImageVariantInfo(config.layout.listingImage);
-    const queryParams = {
-      include: ['author', 'images', 'currentStock'],
-      'fields.image': imageVariantInfo.fieldsImage,
-      ...imageVariantInfo.imageVariants,
-    };
+  'EditListingPage/SHOW_LISTING',
+  async ({ listingId, config }, { getState }) => {
+    console.log('showListingThunk CALLED with listingId:', listingId);
 
-    return sdk.ownListings
-      .show({ ...actionPayload, ...queryParams })
-      .then(response => {
-        // EditListingPage fetches new listing data, which also needs to be added to global data
-        dispatch(addMarketplaceEntities(response));
-        return response;
-      })
-      .catch(e => {
-        return rejectWithValue(storableError(e));
-      });
+    const state = getState().EditListingPage;
+    const { listingDraft } = state;
+
+    // For new drafts, return from Redux state
+    if (listingId?.uuid?.startsWith('draft-')) {
+      console.log('Draft ID detected, returning from Redux. listingDraft:', listingDraft);
+
+      if (listingDraft && listingId.uuid === listingDraft.id?.uuid) {
+        const result = {
+          data: {
+            data: listingDraft,
+            included: [],
+          },
+        };
+        console.log('Returning draft data:', result);
+        return result;
+      }
+
+      console.error('Draft not found in Redux! listingId:', listingId, 'listingDraft:', listingDraft);
+      throw new Error(`Draft ${listingId.uuid} not found in Redux state`);
+    }
+
+    // For existing listings, fetch from Shopify (TODO: implement)
+    console.log('Real listing detected, would fetch from Shopify');
+    return {
+      data: {
+        data: { id: listingId, attributes: {}, relationships: {} },
+        included: [],
+      },
+    };
   }
 );
 // Backward compatible wrappers for the thunks
@@ -159,38 +174,45 @@ const updateStockOfListingMaybe = (listingId, stockTotals, dispatch) => {
 //////////////////////////
 
 // Create listing in draft state
-// NOTE: we want to keep it possible to include stock management field to the first wizard form.
-// this means that there needs to be a sequence of calls:
-// create, set stock, show listing (to get updated currentStock entity)
+// NOTE: We DON'T create in Shopify yet - just store in Redux
+// Product will be created when user publishes
 export const createListingDraftThunk = createAsyncThunk(
   'EditListingPage/createListingDraft',
-  ({ data, config }, { dispatch, rejectWithValue, extra: sdk }) => {
+  ({ data, config }, { dispatch, getState, rejectWithValue, extra: sdk }) => {
+    console.log('createListingDraftThunk CALLED with data:', data);
+
     const { stockUpdate, images, ...rest } = data;
 
-    // If images should be saved, create array out of the image UUIDs for the API call
-    const imageProperty = typeof images !== 'undefined' ? { images: imageIds(images) } : {};
-    const ownListingValues = { ...imageProperty, ...rest };
+    // DON'T create in Shopify yet - just return success
+    // This allows the wizard to continue to the next tab
+    
+    // Prepare images array
+    const imageArray = images ? Object.values(images).filter(img => img.imageId || img.id) : [];
 
-    const imageVariantInfo = getImageVariantInfo(config.layout.listingImage);
-    const queryParams = {
-      expand: true,
-      include: ['author', 'images', 'currentStock'],
-      'fields.image': imageVariantInfo.fieldsImage,
-      ...imageVariantInfo.imageVariants,
+    // Format response to match Sharetribe structure (for compatibility with existing UI)
+    const formattedResponse = {
+      data: {
+        data: {
+          id: { uuid: 'draft-' + Date.now() }, // Temporary draft ID
+          type: 'listing',
+          attributes: {
+            title: data.title,
+            description: data.description,
+            price: data.price,
+            publicData: data.publicData,
+            state: 'draft',
+          },
+          relationships: {
+            images: {
+              data: imageArray.map(img => ({ id: { uuid: img.imageId?.uuid || img.id?.uuid } })),
+            },
+          },
+        },
+      },
     };
 
-    return sdk.ownListings
-      .createDraft(ownListingValues, queryParams)
-      .then(response => {
-        dispatch(addMarketplaceEntities(response));
-        const listingId = response.data.data.id;
-        // If stockUpdate info is passed through, update stock
-        return updateStockOfListingMaybe(listingId, stockUpdate, dispatch).then(() => response);
-      })
-      .catch(e => {
-        log.error(e, 'create-listing-draft-failed', { listingData: data });
-        return rejectWithValue(storableError(e));
-      });
+    // Store the draft data in Redux for later
+    return Promise.resolve(formattedResponse);
   }
 );
 // Backward compatible wrappers for the thunks
@@ -205,48 +227,28 @@ export const requestCreateListingDraft = (data, config) => (dispatch, getState, 
 // Update the given tab of the wizard with the given data. This saves
 // the data to the listing, and marks the tab updated so the UI can
 // display the state.
-// NOTE: what comes to stock management, this follows the same pattern used in create listing call
+// NOTE: We DON'T update Shopify yet - just update Redux state
 export const updateListingThunk = createAsyncThunk(
   'EditListingPage/updateListing',
   ({ tab, data, config }, { dispatch, getState, rejectWithValue, extra: sdk }) => {
+    console.log('updateListingThunk CALLED with:', { tab, data: JSON.parse(JSON.stringify(data)), dataKeys: Object.keys(data) });
     const { id, stockUpdate, images, ...rest } = data;
 
-    // If images should be saved, create array out of the image UUIDs for the API call
-    const imageProperty = typeof images !== 'undefined' ? { images: imageIds(images) } : {};
-    const ownListingUpdateValues = { id, ...imageProperty, ...rest };
-    const imageVariantInfo = getImageVariantInfo(config.layout.listingImage);
-    const queryParams = {
-      expand: true,
-      include: ['author', 'images', 'currentStock'],
-      'fields.image': imageVariantInfo.fieldsImage,
-      ...imageVariantInfo.imageVariants,
+    // DON'T update Shopify yet - just update Redux state
+    // The product will be created when user publishes
+
+    // Format response
+    const formattedResponse = {
+      data: {
+        data: {
+          id: id,
+          type: 'listing',
+          attributes: rest, // Use rest instead of hardcoding fields
+        },
+      },
     };
 
-    return updateStockOfListingMaybe(id, stockUpdate, dispatch)
-      .then(() => sdk.ownListings.update(ownListingUpdateValues, queryParams))
-      .then(response => {
-        const state = getState();
-        const existingTimeZone =
-          state.marketplaceData.entities.ownListing[id.uuid]?.attributes?.availabilityPlan
-            ?.timezone;
-        const includedTimeZone = data?.availabilityPlan?.timezone;
-
-        // If time zone has changed, we need to fetch exceptions again
-        // since week and month boundaries might have changed.
-        if (!!includedTimeZone && includedTimeZone !== existingTimeZone) {
-          const searchString = '';
-          const firstDayOfWeek = config.localization.firstDayOfWeek;
-          const listing = response.data.data;
-          fetchLoadDataExceptions(dispatch, listing, searchString, firstDayOfWeek);
-        }
-
-        dispatch(addMarketplaceEntities(response));
-        return { response, tab };
-      })
-      .catch(e => {
-        log.error(e, 'update-listing-failed', { listingData: data });
-        return rejectWithValue(storableError(e));
-      });
+    return Promise.resolve({ response: formattedResponse, tab });
   }
 );
 // Backward compatible wrappers for the thunks
@@ -262,15 +264,103 @@ export const requestUpdateListing = (tab, data, config) => (dispatch, getState, 
 // Publish Listing //
 /////////////////////
 
-const publishListingPayloadCreator = ({ listingId }, { dispatch, rejectWithValue, extra: sdk }) => {
-  return sdk.ownListings
-    .publishDraft({ id: listingId }, { expand: true })
-    .then(response => {
-      // Add the created listing to the marketplace data
-      dispatch(addMarketplaceEntities(response));
-      return response;
+const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejectWithValue, extra: sdk }) => {
+  const state = getState();
+  const currentUser = state.user.currentUser;
+  const vendorId = currentUser?.id?.uuid;
+
+  // Get the draft listing data from Redux state
+  const listingDraft = state.EditListingPage.listingDraft;
+  
+  if (!listingDraft) {
+    return rejectWithValue(storableError(new Error('No draft listing found')));
+  }
+
+  console.log('listingDraft from Redux:', listingDraft);
+  
+  // Collect all the data from the wizard tabs
+  const title = listingDraft?.attributes?.title;
+  const description = listingDraft?.attributes?.description;
+  const publicData = listingDraft?.attributes?.publicData || {};
+  const price = listingDraft?.attributes?.price; // From pricing tab
+  
+  // Get uploaded images from Redux state
+  const images = state.EditListingPage.uploadedImages;
+  const imageArray = Object.values(images).filter(img => img.imageId || img.id);
+
+  console.log('Publishing listing with data:', { title, price, publicData, imageCount: imageArray.length });
+
+  // NOW create the product in Shopify with ALL collected data
+  return fetch('/api/shopify/create-product', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      vendorId,
+      title,
+      description,
+      price: price?.amount, // Should have price by now
+      publicData,
+      images: imageArray,
+    }),
+  })
+    .then(res => res.json())
+    .then(shopifyData => {
+      console.log('Shopify create response:', shopifyData);
+      
+      if (!shopifyData.success) {
+        throw new Error(shopifyData.error || 'Product creation failed');
+      }
+
+      // Immediately publish the product (set to ACTIVE)
+      return fetch('/api/shopify/publish-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: shopifyData.data.id,
+          vendorId,
+        }),
+      });
+    })
+    .then(res => res.json())
+    .then(publishData => {
+      console.log('Shopify publish response:', publishData);
+      
+      if (!publishData.success) {
+        throw new Error(publishData.error || 'Product publish failed');
+      }
+
+      // Extract numeric Shopify product ID from GID (e.g. "gid://shopify/Product/12345" → "12345")
+      const shopifyGid = publishData.data?.id || '';
+      const shopifyNumericId = shopifyGid.split('/').pop();
+
+      // Format response
+      const formattedResponse = {
+        data: {
+          data: {
+            id: { uuid: shopifyNumericId },
+            type: 'listing',
+            attributes: {
+              state: 'published',
+            },
+          },
+        },
+        shopifyProduct: {
+          id: shopifyNumericId,
+          title: publishData.data?.title || title,
+          handle: publishData.data?.handle,
+          price: price?.amount,
+          sku: publicData?.barcode_UPC,
+          imageUrl: imageArray[0]?.attributes?.variants?.['listing-card']?.url
+            || imageArray[0]?.attributes?.variants?.['scaled-small']?.url
+            || imageArray[0]?.url
+            || null,
+        },
+      };
+
+      return formattedResponse;
     })
     .catch(e => {
+      console.error('Publish error:', e);
       return rejectWithValue(storableError(e));
     });
 };
@@ -561,6 +651,8 @@ const initialState = {
   createListingDraftInProgress: false,
   submittedListingId: null,
   redirectToListing: false,
+  publishSuccess: false,
+  publishedProduct: null,
   uploadedImages: {},
   uploadedImagesOrder: [],
   removedImageIds: [],
@@ -631,12 +723,21 @@ const editListingPageSlice = createSlice({
         state.listingDraft = null;
       })
       .addCase(createListingDraftThunk.fulfilled, (state, action) => {
+        console.log('createListingDraftThunk.fulfilled fired:', {
+          payload: action.payload,
+          stateBeforeUpdate: state.listingDraft,
+        });
+
         const updatedImagesState = updateUploadedImagesState(state, action.payload.data);
         state.uploadedImages = updatedImagesState.uploadedImages;
         state.uploadedImagesOrder = updatedImagesState.uploadedImagesOrder;
         state.createListingDraftInProgress = false;
         state.submittedListingId = action.payload.data.data.id;
         state.listingDraft = action.payload.data.data;
+
+        console.log('createListingDraftThunk.fulfilled after update:', {
+          listingDraft: state.listingDraft,
+        });
       })
       .addCase(createListingDraftThunk.rejected, (state, action) => {
         state.createListingDraftInProgress = false;
@@ -647,8 +748,11 @@ const editListingPageSlice = createSlice({
         state.listingId = action.meta.arg.listingId;
         state.publishListingError = null;
       })
-      .addCase(publishListingThunk.fulfilled, state => {
+      .addCase(publishListingThunk.fulfilled, (state, action) => {
         state.redirectToListing = true;
+        state.publishSuccess = true;
+        state.publishedProduct = action.payload?.shopifyProduct || null;
+        state.listingDraft = null;
         state.createListingDraftError = null;
         state.updateListingError = null;
         state.showListingsError = null;
@@ -670,11 +774,24 @@ const editListingPageSlice = createSlice({
         state.updateListingError = null;
       })
       .addCase(updateListingThunk.fulfilled, (state, action) => {
-        const updatedImagesState = updateUploadedImagesState(state, action.payload.response.data);
-        state.uploadedImages = updatedImagesState.uploadedImages;
-        state.uploadedImagesOrder = updatedImagesState.uploadedImagesOrder;
+        console.log('updateListingThunk.fulfilled fired with:', {
+          actionPayload: action.payload,
+          currentDraft: state.listingDraft,
+        });
+
+        // Update the listingDraft with the new data from this tab
+        if (state.listingDraft && action.payload?.response?.data?.data?.attributes) {
+          const newAttributes = action.payload.response.data.data.attributes;
+
+          state.listingDraft.attributes = {
+            ...state.listingDraft.attributes,
+            ...newAttributes,
+          };
+
+          console.log('Draft updated with new attributes:', state.listingDraft.attributes);
+        }
+
         state.updateInProgress = false;
-        state.updatedTab = action.payload.tab;
       })
       .addCase(updateListingThunk.rejected, (state, action) => {
         state.updateInProgress = false;
@@ -686,17 +803,36 @@ const editListingPageSlice = createSlice({
       })
       .addCase(showListingThunk.fulfilled, (state, action) => {
         const listingIdFromPayload = action.payload.data.data.id;
-        const { listingId, allExceptions, weeklyExceptionQueries, monthlyExceptionQueries } = state;
-        // If listing stays the same, we trust previously fetched exception data.
+
+        console.log('showListingThunk.fulfilled fired:', {
+          listingIdFromPayload,
+          isDraft: listingIdFromPayload?.uuid?.startsWith('draft-'),
+          currentListingDraft: state.listingDraft,
+          currentState: state,
+        });
+
+        // For draft listings, preserve all state including listingDraft
+        if (listingIdFromPayload?.uuid && listingIdFromPayload.uuid.startsWith('draft-')) {
+          console.log('Preserving draft state');
+          state.listingId = listingIdFromPayload;
+          return;
+        }
+
+        console.log('Resetting state for real listing');
+
+        // For real listings, reset state as before but preserve listingDraft
+        const { listingId, allExceptions, weeklyExceptionQueries, monthlyExceptionQueries, listingDraft } = state;
         if (listingIdFromPayload?.uuid === state.listingId?.uuid) {
           Object.assign(state, initialState);
           state.listingId = listingId;
           state.allExceptions = allExceptions;
           state.weeklyExceptionQueries = weeklyExceptionQueries;
           state.monthlyExceptionQueries = monthlyExceptionQueries;
+          state.listingDraft = listingDraft;
         } else {
           Object.assign(state, initialState);
           state.listingId = listingIdFromPayload;
+          state.listingDraft = listingDraft;
         }
       })
       .addCase(showListingThunk.rejected, (state, action) => {
@@ -884,9 +1020,29 @@ export const loadData = (params, search, config) => (dispatch, getState, sdk) =>
       });
   }
 
-  const payload = { id: new UUID(id) };
+  // For draft tabs, skip showListingThunk if the draft already exists in Redux
+  if (type === 'draft' && id?.startsWith('draft-')) {
+    const existingDraft = getState().EditListingPage.listingDraft;
+    if (existingDraft && existingDraft.id?.uuid === id) {
+      console.log('Draft already in Redux, skipping showListingThunk for:', id);
+      return Promise.all([dispatch(fetchCurrentUser(fetchCurrentUserOptions))])
+        .then(response => {
+          const currentUser = getState().user.currentUser;
+          if (currentUser && currentUser.stripeAccount) {
+            dispatch(fetchStripeAccount());
+          }
+          return response;
+        })
+        .catch(e => {
+          throw e;
+        });
+    }
+  }
+
+  // For draft or edit mode, use showListingThunk instead of Sharetribe
+  const listingId = { uuid: id };
   return Promise.all([
-    dispatch(requestShowListing(payload, config)),
+    dispatch(showListingThunk({ listingId, config })),
     dispatch(fetchCurrentUser(fetchCurrentUserOptions)),
   ])
     .then(response => {
@@ -898,9 +1054,7 @@ export const loadData = (params, search, config) => (dispatch, getState, sdk) =>
           dispatch(fetchStripeAccount());
         }
 
-        // Because of two dispatch functions, response is an array.
-        // We are only interested in the response from requestShowListing here,
-        // so we need to pick the first one
+        // Response from showListingThunk
         const listing = response[0]?.data?.data;
         const transactionProcessAlias = listing?.attributes?.publicData?.transactionProcessAlias;
         if (listing && isBookingProcessAlias(transactionProcessAlias)) {

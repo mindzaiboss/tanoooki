@@ -130,6 +130,8 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
   const [failed, setFailed] = useState(false);
   const [usingGeo, setUsingGeo] = useState(false);
   const [selectedTier, setSelectedTier] = useState('economy');
+  const [sellerCountry, setSellerCountry] = useState(null);
+  const [buyerCountry, setBuyerCountry] = useState(null);
 
   const currentUser = useSelector(state => state.user.currentUser);
 
@@ -180,6 +182,8 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
           country: 'US',
         };
       }
+
+      setSellerCountry(sellerAddress.country || null);
 
       // Step 2: Fetch Shippo rates with the resolved seller address
       const fetchRates = async addressTo => {
@@ -306,6 +310,7 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
       const hasAddress = streetAddress && city && postalCode;
 
       if (hasAddress) {
+        setBuyerCountry(country || 'US');
         setUsingGeo(false);
         await fetchRates({
           name: 'Buyer',
@@ -348,6 +353,7 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
             ? COUNTRY_FALLBACKS[geoCountry] || { city: '', state: '', zip: '' }
             : null;
 
+          setBuyerCountry(geoCountry);
           setUsingGeo(true);
           await fetchRates({
             name: 'Buyer',
@@ -425,6 +431,17 @@ const ShippingRatesMaybe = ({ listing, formApi, deliveryMethod }) => {
       {usingGeo ? (
         <p className={css.shippingRatesDisclaimer}>
           Estimated shipping based on your location. Sign up or add your address for exact rates.
+        </p>
+      ) : null}
+      {rateTiers && sellerCountry && buyerCountry && sellerCountry !== buyerCountry ? (
+        <p className={css.shippingRatesTariffWarning}>
+          ⚠️ Import duties and taxes may apply.{' '}
+          <span
+            className={css.shippingRatesTooltipAnchor}
+            title="Cross-border shipments may be subject to customs duties and import taxes charged by the destination country. These fees are not included in the shipping rate shown and are the buyer's responsibility."
+          >
+            Learn more
+          </span>
         </p>
       ) : null}
     </div>

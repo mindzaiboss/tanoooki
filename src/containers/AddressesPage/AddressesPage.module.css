@@ -26,3 +26,112 @@
 .form {
   margin-top: 24px;
 }
+
+.validating {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 8px 0;
+}
+
+.validationError {
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-size: 14px;
+  color: #991b1b;
+}
+
+.validationError ul {
+  margin: 6px 0 0 16px;
+  padding: 0;
+}
+
+.validationError p {
+  margin: 0 0 4px 0;
+}
+
+.validationSuggestion {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-size: 14px;
+  color: #92400e;
+}
+
+.validationSuggestion p {
+  margin: 0 0 6px 0;
+}
+
+.suggestedAddress {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.suggestionActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.acceptButton {
+  background: #EE3A43;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.acceptButton:hover {
+  background: #d42f38;
+}
+
+.keepButton {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.keepButton:hover {
+  background: #f9fafb;
+}
+
+.validationErrorActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.saveAnywayButton {
+  background: white;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.saveAnywayButton:hover {
+  background: #fef2f2;
+}
+
+.saveAnywayHint {
+  font-size: 12px;
+  color: #6b7280;
+}

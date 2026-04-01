@@ -1,8 +1,7 @@
 import React from 'react';
 import { bool, func, object, shape, string, oneOf } from 'prop-types';
-import { compose } from 'redux';
-import { withRouter } from 'react-router-dom';
-import { connect } from 'react-redux';
+import { useParams, useHistory, useLocation } from 'react-router-dom';
+import { useSelector, useDispatch } from 'react-redux';
 
 // Import configs and util modules
 import { intlShape, useIntl } from '../../util/reactIntl';
@@ -127,47 +126,68 @@ const pickRenderableImages = (
  * @param {Object} [props.updateStripeAccountError] - The update stripe account error
  * @returns {JSX.Element}
  */
-export const EditListingPageComponent = props => {
+export const EditListingPageComponent = () => {
+  console.log('TOP OF RENDER');
   const intl = useIntl();
-  const {
-    currentUser,
-    createStripeAccountError,
-    fetchInProgress,
-    fetchStripeAccountError,
-    getOwnListing,
-    getAccountLinkError,
-    getAccountLinkInProgress,
-    history,
-    onFetchExceptions,
-    onAddAvailabilityException,
-    onDeleteAvailabilityException,
-    onCreateListingDraft,
-    onPublishListingDraft,
-    onUpdateListing,
-    onImageUpload,
-    onRemoveListingImage,
-    onManageDisableScrolling,
-    onPayoutDetailsSubmit,
-    onPayoutDetailsChange,
-    onGetStripeConnectAccountLink,
-    page,
-    params,
-    location,
-    scrollingDisabled,
-    stripeAccountFetched,
-    stripeAccount,
-    updateStripeAccountError,
-    authScopes,
-  } = props;
+  const routerParams = useParams();
+  console.log('routerParams:', routerParams);
+  const history = useHistory();
+  const location = useLocation();
+  const dispatch = useDispatch();
 
-  const { id, type, returnURLType } = params;
+  // Redux state
+  const page = useSelector(state => state.EditListingPage);
+  const currentUser = useSelector(state => state.user.currentUser);
+  const scrollingDisabled = useSelector(isScrollingDisabled);
+  const authScopes = useSelector(state => state.auth.authScopes);
+  const {
+    getAccountLinkInProgress,
+    getAccountLinkError,
+    createStripeAccountInProgress,
+    createStripeAccountError,
+    updateStripeAccountError,
+    fetchStripeAccountError,
+    stripeAccount,
+    stripeAccountFetched,
+  } = useSelector(state => state.stripeConnectAccount);
+  const fetchInProgress = createStripeAccountInProgress;
+
+  // Resolve own listing from marketplace entities
+  const currentListing = useSelector(state => {
+    const submittedId = state.EditListingPage.submittedListingId;
+    const listingId = submittedId || (routerParams.id ? new UUID(routerParams.id) : null);
+
+    // For draft listings, return from listingDraft in Redux
+    if (listingId && routerParams.type === LISTING_PAGE_PARAM_TYPE_DRAFT && state.EditListingPage.listingDraft) {
+      return ensureOwnListing(state.EditListingPage.listingDraft);
+    }
+
+    if (!listingId) return ensureOwnListing(null);
+    const listings = getMarketplaceEntities(state, [{ id: listingId, type: 'ownListing' }]);
+    return ensureOwnListing(listings.length === 1 ? listings[0] : null);
+  });
+
+  // Dispatch-based action creators
+  const onFetchExceptions = params => dispatch(requestFetchAvailabilityExceptions(params));
+  const onAddAvailabilityException = params => dispatch(requestAddAvailabilityException(params));
+  const onDeleteAvailabilityException = params => dispatch(requestDeleteAvailabilityException(params));
+  const onUpdateListing = (tab, values, config) => dispatch(requestUpdateListing(tab, values, config));
+  const onCreateListingDraft = (values, config) => dispatch(requestCreateListingDraft(values, config));
+  const onPublishListingDraft = listingId => dispatch(requestPublishListingDraft(listingId));
+  const onImageUpload = (data, listingImageConfig) => dispatch(requestImageUpload(data, listingImageConfig));
+  const onManageDisableScrolling = (componentId, disableScrolling) => dispatch(manageDisableScrolling(componentId, disableScrolling));
+  const onPayoutDetailsChange = () => dispatch(stripeAccountClearError());
+  const onPayoutDetailsSubmit = (values, isUpdateCall) => dispatch(savePayoutDetails(values, isUpdateCall));
+  const onGetStripeConnectAccountLink = params => dispatch(getStripeConnectAccountLink(params));
+  const onRemoveListingImage = imageId => dispatch(removeListingImage(imageId));
+
+  const { id, type, returnURLType } = routerParams;
   const isNewURI = type === LISTING_PAGE_PARAM_TYPE_NEW;
   const isDraftURI = type === LISTING_PAGE_PARAM_TYPE_DRAFT;
   const isNewListingFlow = isNewURI || isDraftURI;
 
   const listingId = page.submittedListingId || (id ? new UUID(id) : null);
-  const currentListing = ensureOwnListing(getOwnListing(listingId));
-  const { state: currentListingState } = currentListing.attributes;
+  const currentListingState = currentListing?.attributes?.state || null;
 
   const hasPostingRights = hasPermissionToPostListings(currentUser);
   const hasPostingRightsError = isErrorNoPermissionToPostListings(page.publishListingError?.error);
@@ -179,6 +199,21 @@ export const EditListingPageComponent = props => {
 
   const hasStripeOnboardingDataIfNeeded = returnURLType ? !!currentUser?.id : true;
   const showWizard = hasStripeOnboardingDataIfNeeded && (isNewURI || currentListing.id);
+
+  // After successful Shopify publish, redirect to the listing created success page
+  if (page.publishSuccess && page.publishedProduct?.id) {
+    return (
+      <NamedRedirect
+        name="ListingCreatedPage"
+        params={{ productId: page.publishedProduct.id }}
+        state={{
+          title: page.publishedProduct.title,
+          price: page.publishedProduct.price,
+          imageUrl: page.publishedProduct.imageUrl,
+        }}
+      />
+    );
+  }
 
   if (!isUserAuthorized(currentUser)) {
     return (
@@ -262,6 +297,9 @@ export const EditListingPageComponent = props => {
       ? 'EditListingPage.titleCreateListing'
       : 'EditListingPage.titleEditListing';
 
+    const wizardKey = `${routerParams.id}-${routerParams.tab}`;
+    console.log('EditListingPage render — wizardKey:', wizardKey, 'routerParams:', routerParams);
+
     return (
       <Page title={intl.formatMessage({ id: titleId })} scrollingDisabled={scrollingDisabled}>
         <TopbarContainer
@@ -270,9 +308,10 @@ export const EditListingPageComponent = props => {
           mobileClassName={css.mobileTopbar}
         />
         <EditListingWizard
+          key={wizardKey}
           id="EditListingWizard"
           className={css.wizard}
-          params={params}
+          params={routerParams}
           locationSearch={parse(location.search)}
           disabled={disableForm}
           errors={errors}
@@ -298,7 +337,7 @@ export const EditListingPageComponent = props => {
           onRemoveImage={onRemoveListingImage}
           currentUser={currentUser}
           onManageDisableScrolling={onManageDisableScrolling}
-          stripeOnboardingReturnURL={params.returnURLType}
+          stripeOnboardingReturnURL={routerParams.returnURLType}
           updatedTab={page.updatedTab}
           updateInProgress={page.updateInProgress || page.createListingDraftInProgress}
           payoutDetailsSaveInProgress={page.payoutDetailsSaveInProgress}
@@ -332,74 +371,6 @@ export const EditListingPageComponent = props => {
   }
 };
 
-const mapStateToProps = state => {
-  const page = state.EditListingPage;
-  const {
-    getAccountLinkInProgress,
-    getAccountLinkError,
-    createStripeAccountInProgress,
-    createStripeAccountError,
-    updateStripeAccountError,
-    fetchStripeAccountError,
-    stripeAccount,
-    stripeAccountFetched,
-  } = state.stripeConnectAccount;
-
-  const getOwnListing = id => {
-    const listings = getMarketplaceEntities(state, [{ id, type: 'ownListing' }]);
-    return listings.length === 1 ? listings[0] : null;
-  };
-
-  const { authScopes } = state.auth;
-
-  return {
-    getAccountLinkInProgress,
-    getAccountLinkError,
-    createStripeAccountError,
-    updateStripeAccountError,
-    fetchStripeAccountError,
-    stripeAccount,
-    stripeAccountFetched,
-    currentUser: state.user.currentUser,
-    fetchInProgress: createStripeAccountInProgress,
-    getOwnListing,
-    page,
-    scrollingDisabled: isScrollingDisabled(state),
-    authScopes,
-  };
-};
-
-const mapDispatchToProps = dispatch => ({
-  onFetchExceptions: params => dispatch(requestFetchAvailabilityExceptions(params)),
-  onAddAvailabilityException: params => dispatch(requestAddAvailabilityException(params)),
-  onDeleteAvailabilityException: params => dispatch(requestDeleteAvailabilityException(params)),
-
-  onUpdateListing: (tab, values, config) => dispatch(requestUpdateListing(tab, values, config)),
-  onCreateListingDraft: (values, config) => dispatch(requestCreateListingDraft(values, config)),
-  onPublishListingDraft: listingId => dispatch(requestPublishListingDraft(listingId)),
-  onImageUpload: (data, listingImageConfig) =>
-    dispatch(requestImageUpload(data, listingImageConfig)),
-  onManageDisableScrolling: (componentId, disableScrolling) =>
-    dispatch(manageDisableScrolling(componentId, disableScrolling)),
-  onPayoutDetailsChange: () => dispatch(stripeAccountClearError()),
-  onPayoutDetailsSubmit: (values, isUpdateCall) =>
-    dispatch(savePayoutDetails(values, isUpdateCall)),
-  onGetStripeConnectAccountLink: params => dispatch(getStripeConnectAccountLink(params)),
-  onRemoveListingImage: imageId => dispatch(removeListingImage(imageId)),
-});
-
-// Note: it is important that the withRouter HOC is **outside** the
-// connect HOC, otherwise React Router won't rerender any Route
-// components since connect implements a shouldComponentUpdate
-// lifecycle hook.
-//
-// See: https://github.com/ReactTraining/react-router/issues/4671
-const EditListingPage = compose(
-  withRouter,
-  connect(
-    mapStateToProps,
-    mapDispatchToProps
-  )
-)(EditListingPageComponent);
+const EditListingPage = EditListingPageComponent;
 
 export default EditListingPage;

@@ -1,7 +1,10 @@
-const sharetribeIntegrationSdk = require('sharetribe-flex-integration-sdk');
+// server/api/seller-location.js
+const { createClient } = require('@supabase/supabase-js');
 
-const INTEGRATION_CLIENT_ID = process.env.SHARETRIBE_INTEGRATION_CLIENT_ID;
-const INTEGRATION_CLIENT_SECRET = process.env.SHARETRIBE_INTEGRATION_CLIENT_SECRET;
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 const COUNTRY_FALLBACK = {
   CA: { city: 'Toronto', state: 'ON', street1: '220 Yonge St', zip: 'M5B 2H1', country: 'CA' },
@@ -24,33 +27,37 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'sellerId is required' });
     }
 
-    const integrationSdk = sharetribeIntegrationSdk.createInstance({
-      clientId: INTEGRATION_CLIENT_ID,
-      clientSecret: INTEGRATION_CLIENT_SECRET,
-    });
+    // Fetch vendor from Supabase
+    const { data: vendor, error } = await supabase
+      .from('vendors')
+      .select('street_address, street_address_2, city, state_province, postal_code, country')
+      .eq('id', sellerId)
+      .single();
 
-    const { UUID } = sharetribeIntegrationSdk.types;
-
-    const response = await integrationSdk.users.show({
-      id: new UUID(sellerId),
-      include: ['profileImage'],
-    });
-
-    const user = response.data.data;
-    const privateData = user.attributes.profile.privateData || {};
-    console.log('Seller privateData:', JSON.stringify(privateData, null, 2));
+    if (error) {
+      console.error('Supabase error:', error);
+      return res.json({
+        success: true,
+        tier: 'fallback',
+        address: {
+          name: 'Seller',
+          ...COUNTRY_FALLBACK['CA'],
+          phone: '4161234567',
+        },
+      });
+    }
 
     const {
-      streetAddress,
-      streetAddress2,
+      street_address: streetAddress,
+      street_address_2: streetAddress2,
       city,
-      stateProvince,
-      postalCode,
+      state_province: stateProvince,
+      postal_code: postalCode,
       country,
-    } = privateData;
+    } = vendor;
 
+    // 4-tier fallback logic
     if (streetAddress && city && stateProvince && postalCode && country) {
-      // Tier 1 — full address available
       return res.json({
         success: true,
         tier: 'full',
@@ -66,7 +73,6 @@ module.exports = async (req, res) => {
         },
       });
     } else if (city && stateProvince && country) {
-      // Tier 2 — city + state + country
       return res.json({
         success: true,
         tier: 'city',
@@ -81,7 +87,6 @@ module.exports = async (req, res) => {
         },
       });
     } else if (country) {
-      // Tier 3 — country only, use capital fallback
       const fallback = COUNTRY_FALLBACK[country] || COUNTRY_FALLBACK['US'];
       return res.json({
         success: true,
@@ -93,7 +98,6 @@ module.exports = async (req, res) => {
         },
       });
     } else {
-      // Tier 4 — nothing, use Toronto as default
       return res.json({
         success: true,
         tier: 'fallback',

@@ -55,3 +55,10 @@
   margin-top: 24px;
   margin-bottom: 56px;
 }
+
+.validationInlineError {
+  font-size: 13px;
+  color: #991b1b;
+  margin: 0 0 8px 0;
+  font-weight: 500;
+}

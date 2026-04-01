@@ -40,6 +40,7 @@ const StripePayoutPage = loadable(() => import(/* webpackChunkName: "StripePayou
 const TermsOfServicePage = loadable(() => import(/* webpackChunkName: "TermsOfServicePage" */ '../containers/TermsOfServicePage/TermsOfServicePage'));
 const TransactionPage = loadable(() => import(/* webpackChunkName: "TransactionPage" */ '../containers/TransactionPage/TransactionPage'));
 const NoAccessPage = loadable(() => import(/* webpackChunkName: "NoAccessPage" */ '../containers/NoAccessPage/NoAccessPage'));
+const ListingCreatedPage = loadable(() => import(/* webpackChunkName: "ListingCreatedPage" */ '../containers/ListingCreatedPage/ListingCreatedPage'));
 
 // Styleguide helps you to review current components and develop new ones
 const StyleguidePage = loadable(() => import(/* webpackChunkName: "StyleguidePage" */ '../containers/StyleguidePage/StyleguidePage'));
@@ -144,15 +145,6 @@ const routeConfiguration = (layoutConfig, accessControlConfig) => {
       setInitialValues: pageDataLoadingAPI.CheckoutPage.setInitialValues,
     },
     {
-      path: '/l/:slug/:id/:variant',
-      name: 'ListingPageVariant',
-      auth: true,
-      authPage: 'LoginPage',
-      component: ListingPage,
-      loadData: pageDataLoadingAPI.ListingPage.loadData,
-      prioritizeMapLibraryLoading: true,
-    },
-    {
       path: '/l/new',
       name: 'NewListingPage',
       auth: true,
@@ -176,6 +168,15 @@ const routeConfiguration = (layoutConfig, accessControlConfig) => {
       auth: true,
       component: EditListingPage,
       loadData: pageDataLoadingAPI.EditListingPage.loadData,
+    },
+    {
+      path: '/l/:slug/:id/:variant',
+      name: 'ListingPageVariant',
+      auth: true,
+      authPage: 'LoginPage',
+      component: ListingPage,
+      loadData: pageDataLoadingAPI.ListingPage.loadData,
+      prioritizeMapLibraryLoading: true,
     },
 
     // Canonical path should be after the `/l/new` path since they
@@ -414,6 +415,13 @@ const routeConfiguration = (layoutConfig, accessControlConfig) => {
       path: '/no-:missingAccessRight',
       name: 'NoAccessPage',
       component: NoAccessPage,
+    },
+    {
+      path: '/listing-created/:productId',
+      name: 'ListingCreatedPage',
+      auth: true,
+      authPage: 'LoginPage',
+      component: ListingCreatedPage,
     },
     {
       path: '/notfound',
