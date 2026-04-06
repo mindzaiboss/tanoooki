@@ -1,17 +1,40 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { util as sdkUtil } from '../util/sdkLoader';
-import { denormalisedResponseEntities, ensureOwnListing } from '../util/data';
+import { ensureOwnListing } from '../util/data';
 import * as log from '../util/log';
 import { LISTING_STATE_DRAFT } from '../util/types';
 import { storableError } from '../util/errors';
 import { isUserAuthorized } from '../util/userHelpers';
-import {
-  getStatesNeedingProviderAttention,
-  getStatesNeedingCustomerAttention,
-} from '../transactions/transaction';
+import { getAccessToken } from '../util/authTokens';
 
 import { authInfo } from './auth.duck';
 import { updateStripeConnectAccount } from './stripeConnectAccount.duck';
+
+// Map a Supabase user object to the Sharetribe-compatible shape expected by the UI
+const formatSupabaseUser = supabaseUser => {
+  const metadata = supabaseUser.user_metadata || {};
+  const profile = supabaseUser.profile || {};
+  return {
+    id: { uuid: supabaseUser.id },
+    type: 'currentUser',
+    attributes: {
+      email: supabaseUser.email,
+      emailVerified: !!supabaseUser.email_confirmed_at,
+      profile: {
+        displayName: metadata.display_name || supabaseUser.email?.split('@')[0] || '',
+        firstName: metadata.first_name || '',
+        lastName: metadata.last_name || '',
+        abbreviatedName: (metadata.display_name || supabaseUser.email || '')[0]?.toUpperCase() || '',
+        bio: profile.bio || null,
+        publicData: profile.publicData || {},
+        privateData: profile.privateData || {},
+        protectedData: profile.protectedData || {},
+        metadata: {},
+      },
+      createdAt: supabaseUser.created_at ? new Date(supabaseUser.created_at) : null,
+      permissions: { postListings: { allowed: true }, initiateTransactions: { allowed: true } },
+    },
+  };
+};
 
 // ================ Helper Functions ================ //
 
@@ -36,32 +59,8 @@ const mergeCurrentUser = (oldCurrentUser, newCurrentUser) => {
 //////////////////////////////////////////////////////////////////////
 
 const fetchCurrentUserHasListingsPayloadCreator = (_, thunkAPI) => {
-  const { getState, extra: sdk, rejectWithValue } = thunkAPI;
-  const { currentUser } = getState().user;
-
-  if (!currentUser) {
-    return Promise.resolve({ hasListings: false });
-  }
-
-  const params = {
-    // Since we are only interested in if the user has published
-    // listings, we only need at most one result.
-    states: 'published',
-    page: 1,
-    perPage: 1,
-  };
-
-  return sdk.ownListings
-    .query(params)
-    .then(response => {
-      const hasListings = response.data.data && response.data.data.length > 0;
-
-      const hasPublishedListings =
-        hasListings &&
-        ensureOwnListing(response.data.data[0]).attributes.state !== LISTING_STATE_DRAFT;
-      return { hasListings: !!hasPublishedListings };
-    })
-    .catch(e => rejectWithValue(storableError(e)));
+  // TODO: replace with Shopify product count query for this vendor
+  return Promise.resolve({ hasListings: false });
 };
 
 export const fetchCurrentUserHasListingsThunk = createAsyncThunk(
@@ -78,24 +77,9 @@ export const fetchCurrentUserHasListings = () => (dispatch, getState, sdk) => {
 // Fetch transactions to check if currentUser has orders //
 ///////////////////////////////////////////////////////////
 
-const fetchCurrentUserHasOrdersPayloadCreator = (_, { getState, extra: sdk, rejectWithValue }) => {
-  if (!getState().user.currentUser) {
-    return Promise.resolve({ hasOrders: false });
-  }
-
-  const params = {
-    only: 'order',
-    page: 1,
-    perPage: 1,
-  };
-
-  return sdk.transactions
-    .query(params)
-    .then(response => {
-      const hasOrders = response.data.data && response.data.data.length > 0;
-      return { hasOrders: !!hasOrders };
-    })
-    .catch(e => rejectWithValue(storableError(e)));
+const fetchCurrentUserHasOrdersPayloadCreator = () => {
+  // TODO: replace with Shopify order count query for this vendor
+  return Promise.resolve({ hasOrders: false });
 };
 
 export const fetchCurrentUserHasOrdersThunk = createAsyncThunk(
@@ -115,33 +99,9 @@ export const fetchCurrentUserHasOrders = () => (dispatch, getState, sdk) => {
 // Notificaiton page size is max (100 items on page)
 const NOTIFICATION_PAGE_SIZE = 100;
 
-const fetchCurrentUserNotificationsPayloadCreator = (_, { extra: sdk, rejectWithValue }) => {
-  const statesNeedingProviderAttention = getStatesNeedingProviderAttention() || [];
-  const statesNeedingCustomerAttention = getStatesNeedingCustomerAttention() || [];
-
-  const paramsForSales = {
-    only: 'sale',
-    states: statesNeedingProviderAttention.map(state => `state/${state}`).join(','),
-    page: 1,
-    perPage: NOTIFICATION_PAGE_SIZE,
-  };
-  const paramsForOrders = {
-    only: 'order',
-    states: statesNeedingCustomerAttention.map(state => `state/${state}`).join(','),
-    page: 1,
-    perPage: NOTIFICATION_PAGE_SIZE,
-  };
-
-  return Promise.all([
-    sdk.transactions.query(paramsForSales),
-    sdk.transactions.query(paramsForOrders),
-  ])
-    .then(([sales, orders]) => {
-      const saleNotificationsCount = sales.data.data.length;
-      const orderNotificationsCount = orders.data.data.length;
-      return { saleNotificationsCount, orderNotificationsCount };
-    })
-    .catch(e => rejectWithValue(storableError(e)));
+const fetchCurrentUserNotificationsPayloadCreator = () => {
+  // TODO: replace with Shopify/Supabase notification query
+  return Promise.resolve({ saleNotificationsCount: 0, orderNotificationsCount: 0 });
 };
 
 export const fetchCurrentUserNotificationsThunk = createAsyncThunk(
@@ -160,7 +120,6 @@ const fetchCurrentUserPayloadCreator = (options, thunkAPI) => {
   const { currentUserHasListings, currentUserShowTimestamp } = state.user || {};
   const { isAuthenticated } = state.auth;
   const {
-    callParams = null,
     updateHasListings = true,
     updateNotifications = true,
     afterLogin,
@@ -178,67 +137,38 @@ const fetchCurrentUserPayloadCreator = (options, thunkAPI) => {
     return Promise.resolve(null);
   }
 
-  const parameters = callParams || {
-    include: ['effectivePermissionSet', 'profileImage', 'stripeAccount'],
-    'fields.image': [
-      'variants.square-small',
-      'variants.square-small2x',
-      'variants.square-xsmall',
-      'variants.square-xsmall2x',
-    ],
-    'imageVariant.square-xsmall': sdkUtil.objectQueryString({
-      w: 40,
-      h: 40,
-      fit: 'crop',
-    }),
-    'imageVariant.square-xsmall2x': sdkUtil.objectQueryString({
-      w: 80,
-      h: 80,
-      fit: 'crop',
-    }),
-  };
+  const token = getAccessToken();
+  if (!token && !afterLogin) {
+    return Promise.resolve(null);
+  }
 
-  return sdk.currentUser
-    .show(parameters)
-    .then(response => {
-      const entities = denormalisedResponseEntities(response);
-      if (entities.length !== 1) {
-        throw new Error('Expected a resource in the sdk.currentUser.show response');
-      }
-      const currentUser = entities[0];
-
-      // Save stripeAccount to store.stripe.stripeAccount if it exists
-      if (currentUser.stripeAccount) {
-        dispatch(updateStripeConnectAccount(currentUser.stripeAccount));
-      }
-
-      // set current user id to the logger
+  return fetch('/api/auth/current-user', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+    .then(res => {
+      if (!res.ok) return null;
+      return res.json();
+    })
+    .then(data => {
+      if (!data?.user) return null;
+      const currentUser = formatSupabaseUser(data.user);
       log.setUserId(currentUser.id.uuid);
       return currentUser;
     })
     .then(currentUser => {
-      // If currentUser is not active (e.g. in 'pending-approval' state),
-      // then they don't have listings or transactions that we care about.
+      if (!currentUser) return null;
       if (isUserAuthorized(currentUser)) {
         if (currentUserHasListings === false && updateHasListings !== false) {
           dispatch(fetchCurrentUserHasListings());
         }
-
         if (updateNotifications !== false) {
           dispatch(fetchCurrentUserNotifications());
         }
-
-        if (!currentUser.attributes.emailVerified) {
-          dispatch(fetchCurrentUserHasOrders());
-        }
       }
-
-      // Make sure auth info is up to date
       dispatch(authInfo());
       return currentUser;
     })
     .catch(e => {
-      // Make sure auth info is up to date
       dispatch(authInfo());
       log.error(e, 'fetch-current-user-failed');
       return rejectWithValue(storableError(e));
@@ -268,11 +198,9 @@ export const fetchCurrentUser = options => (dispatch, getState, sdk) => {
 // Send verification email to currentUser //
 /////////////////////////////////////////////
 
-const sendVerificationEmailPayloadCreator = (_, { extra: sdk, rejectWithValue }) => {
-  return sdk.currentUser
-    .sendVerificationEmail()
-    .then(() => ({}))
-    .catch(e => rejectWithValue(storableError(e)));
+const sendVerificationEmailPayloadCreator = () => {
+  // TODO: trigger Supabase email verification resend
+  return Promise.resolve({});
 };
 export const sendVerificationEmailThunk = createAsyncThunk(
   'user/sendVerificationEmail',
