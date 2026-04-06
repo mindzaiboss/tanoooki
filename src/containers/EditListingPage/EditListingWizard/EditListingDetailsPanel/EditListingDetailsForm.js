@@ -367,12 +367,8 @@ const EditListingDetailsForm = props => (
       const [detectedBarcode, setDetectedBarcode] = useState(null);
 
 useEffect(() => {
-  console.log('detectedBarcode useEffect fired:', detectedBarcode);
-  console.log('formApi:', !!formApi);
   if (detectedBarcode) {
     formApi.change('pub_barcode_UPC', detectedBarcode);
-    console.log('formApi.change called with:', detectedBarcode);
-    console.log('pub_barcode value after change:', formApi.getState()?.values?.pub_barcode);
   }
 }, [detectedBarcode]);
 
@@ -444,12 +440,24 @@ useEffect(() => {
             return;
           }
 
-          // Send CDN URLs to the server — the server fetches and converts to base64
-          const imageData = images.map(image => ({
-            data: image.attributes?.variants?.['listing-card']?.url
-              || image.attributes?.variants?.['scaled-small']?.url
-              || image.imageUrl,
-          }));
+          // Convert File objects to base64 for the AI endpoint
+          const fileToBase64 = file => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+          });
+
+          const imageData = await Promise.all(
+            images.map(async image => {
+              if (image.file) {
+                const base64 = await fileToBase64(image.file);
+                return { data: base64, media_type: image.file.type || 'image/jpeg' };
+              }
+              // Fallback: send URL if file not available (e.g. previously saved images)
+              return { url: image.url || image.imageUrl };
+            })
+          );
 
           const res = await fetch('/api/generate-listing', {
             method: 'POST',
@@ -676,8 +684,6 @@ useEffect(() => {
 
           {showListingFields && isCompatibleCurrency && (() => {
             const barcodeConfig = listingFieldsConfig.find(f => f.key === 'barcode_UPC');
-            console.log('barcodeConfig:', barcodeConfig);
-            console.log('listingFieldsConfig keys:', listingFieldsConfig.map(f => f.key));
             const barcodeLabel = barcodeConfig?.saveConfig?.label || barcodeConfig?.label || 'Barcode / UPC';
             const barcodePlaceholder = barcodeConfig?.saveConfig?.placeholderMessage || '';
             return (

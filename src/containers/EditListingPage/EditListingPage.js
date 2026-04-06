@@ -174,7 +174,14 @@ export const EditListingPageComponent = () => {
   const onUpdateListing = (tab, values, config) => dispatch(requestUpdateListing(tab, values, config));
   const onCreateListingDraft = (values, config) => dispatch(requestCreateListingDraft(values, config));
   const onPublishListingDraft = listingId => dispatch(requestPublishListingDraft(listingId));
-  const onImageUpload = (data, listingImageConfig) => dispatch(requestImageUpload(data, listingImageConfig));
+  const onImageUpload = (data, listingImageConfig) => {
+    console.log('onImageUpload CALLED');
+    console.log('File:', data?.file);
+    console.log('About to dispatch uploadImageThunk');
+    const result = dispatch(requestImageUpload(data, listingImageConfig));
+    console.log('uploadImageThunk dispatched');
+    return result;
+  };
   const onManageDisableScrolling = (componentId, disableScrolling) => dispatch(manageDisableScrolling(componentId, disableScrolling));
   const onPayoutDetailsChange = () => dispatch(stripeAccountClearError());
   const onPayoutDetailsSubmit = (values, isUpdateCall) => dispatch(savePayoutDetails(values, isUpdateCall));

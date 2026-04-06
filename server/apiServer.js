@@ -50,3 +50,13 @@ app.get('/sitemap-:resource', sitemapResourceRoute);
 app.listen(PORT, () => {
   console.log(`API server listening on ${PORT}`);
 });
+
+process.on('uncaughtException', (error) => {
+  console.error('UNCAUGHT EXCEPTION:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
+  process.exit(1);
+});

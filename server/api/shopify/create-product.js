@@ -46,11 +46,9 @@ module.exports = async (req, res) => {
       { namespace: 'shipping', key: 'distance_unit', value: publicData?.packageDistanceUnit || 'cm', type: 'single_line_text_field' },
     ].filter(m => m.value);
 
-    // Prepare images
+    // Prepare images — new format: [{ id, url, file }]
     const imageInputs = images?.length > 0
-      ? images.map(img => ({
-          src: img.url || img.attributes?.variants?.['listing-card']?.url || img.attributes?.variants?.['scaled-small']?.url,
-        })).filter(img => img.src)
+      ? images.map(img => ({ src: img.url })).filter(img => img.src)
       : [];
 
     // ─── Step 1: Create product (without variants — required for API 2024-10+) ───
@@ -62,6 +60,10 @@ module.exports = async (req, res) => {
             title
             handle
             status
+            featuredImage {
+              url
+              altText
+            }
             variants(first: 1) {
               edges {
                 node {
@@ -209,6 +211,7 @@ module.exports = async (req, res) => {
         title: product.title,
         handle: product.handle,
         status: product.status,
+        imageUrl: product.featuredImage?.url || null,
       },
     });
 
