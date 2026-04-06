@@ -16,6 +16,13 @@ const shippoRates = require('./api/shippo-rates');
 const validateAddress = require('./api/validate-address');
 
 const sellerLocation = require('./api/seller-location');
+const uploadImage = require('./api/upload-image');
+
+// Auth API routes
+const authSignUp = require('./api/auth/signup');
+const authSignIn = require('./api/auth/signin');
+const authSignOut = require('./api/auth/signout');
+const authCurrentUser = require('./api/auth/current-user');
 
 // Shopify API routes
 const createProduct = require('./api/shopify/create-product');
@@ -43,7 +50,9 @@ const router = express.Router();
 // ================ API router middleware: ================ //
 
 // Parse JSON bodies (e.g. /api/generate-listing)
-router.use(bodyParser.json());
+// 50mb limit to support base64 image uploads
+router.use(bodyParser.json({ limit: '50mb' }));
+router.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 
 // Parse Transit body first to a string
 router.use(
@@ -81,6 +90,13 @@ router.get('/geolocate', geolocate);
 router.post('/shippo-rates', shippoRates);
 router.post('/seller-location', sellerLocation);
 router.post('/validate-address', validateAddress);
+router.post('/upload-image', uploadImage);
+
+// Auth API endpoints
+router.post('/auth/signup', authSignUp);
+router.post('/auth/signin', authSignIn);
+router.post('/auth/signout', authSignOut);
+router.get('/auth/current-user', authCurrentUser);
 
 // Shopify API endpoints
 router.post('/shopify/create-product', createProduct);

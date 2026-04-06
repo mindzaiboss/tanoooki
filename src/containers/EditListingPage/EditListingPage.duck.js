@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
 import { omit } from '../../util/common';
-import { types as sdkTypes, createImageVariantConfig } from '../../util/sdkLoader';
+import { types as sdkTypes } from '../../util/sdkLoader';
 import { denormalisedResponseEntities } from '../../util/data';
 import {
   getDefaultTimeZoneOnBrowser,
@@ -66,19 +66,6 @@ const updateUploadedImagesState = (state, payload) => {
       };
 };
 
-const getImageVariantInfo = listingImageConfig => {
-  const { aspectWidth = 1, aspectHeight = 1, variantPrefix = 'listing-card' } = listingImageConfig;
-  const aspectRatio = aspectHeight / aspectWidth;
-  const fieldsImage = [`variants.${variantPrefix}`, `variants.${variantPrefix}-2x`];
-
-  return {
-    fieldsImage,
-    imageVariants: {
-      ...createImageVariantConfig(`${variantPrefix}`, 400, aspectRatio),
-      ...createImageVariantConfig(`${variantPrefix}-2x`, 800, aspectRatio),
-    },
-  };
-};
 
 const sortExceptionsByStartTime = (a, b) => {
   return a.attributes.start.getTime() - b.attributes.start.getTime();
@@ -92,32 +79,25 @@ const sortExceptionsByStartTime = (a, b) => {
 export const showListingThunk = createAsyncThunk(
   'EditListingPage/SHOW_LISTING',
   async ({ listingId, config }, { getState }) => {
-    console.log('showListingThunk CALLED with listingId:', listingId);
-
     const state = getState().EditListingPage;
     const { listingDraft } = state;
 
     // For new drafts, return from Redux state
     if (listingId?.uuid?.startsWith('draft-')) {
-      console.log('Draft ID detected, returning from Redux. listingDraft:', listingDraft);
-
       if (listingDraft && listingId.uuid === listingDraft.id?.uuid) {
-        const result = {
+        return {
           data: {
             data: listingDraft,
             included: [],
           },
         };
-        console.log('Returning draft data:', result);
-        return result;
       }
 
-      console.error('Draft not found in Redux! listingId:', listingId, 'listingDraft:', listingDraft);
+      console.error('Draft not found in Redux! listingId:', listingId);
       throw new Error(`Draft ${listingId.uuid} not found in Redux state`);
     }
 
     // For existing listings, fetch from Shopify (TODO: implement)
-    console.log('Real listing detected, would fetch from Shopify');
     return {
       data: {
         data: { id: listingId, attributes: {}, relationships: {} },
@@ -179,7 +159,6 @@ const updateStockOfListingMaybe = (listingId, stockTotals, dispatch) => {
 export const createListingDraftThunk = createAsyncThunk(
   'EditListingPage/createListingDraft',
   ({ data, config }, { dispatch, getState, rejectWithValue, extra: sdk }) => {
-    console.log('createListingDraftThunk CALLED with data:', data);
 
     const { stockUpdate, images, ...rest } = data;
 
@@ -231,7 +210,6 @@ export const requestCreateListingDraft = (data, config) => (dispatch, getState, 
 export const updateListingThunk = createAsyncThunk(
   'EditListingPage/updateListing',
   ({ tab, data, config }, { dispatch, getState, rejectWithValue, extra: sdk }) => {
-    console.log('updateListingThunk CALLED with:', { tab, data: JSON.parse(JSON.stringify(data)), dataKeys: Object.keys(data) });
     const { id, stockUpdate, images, ...rest } = data;
 
     // DON'T update Shopify yet - just update Redux state
@@ -276,8 +254,6 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
     return rejectWithValue(storableError(new Error('No draft listing found')));
   }
 
-  console.log('listingDraft from Redux:', listingDraft);
-  
   // Collect all the data from the wizard tabs
   const title = listingDraft?.attributes?.title;
   const description = listingDraft?.attributes?.description;
@@ -287,8 +263,6 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
   // Get uploaded images from Redux state
   const images = state.EditListingPage.uploadedImages;
   const imageArray = Object.values(images).filter(img => img.imageId || img.id);
-
-  console.log('Publishing listing with data:', { title, price, publicData, imageCount: imageArray.length });
 
   // NOW create the product in Shopify with ALL collected data
   return fetch('/api/shopify/create-product', {
@@ -305,8 +279,6 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
   })
     .then(res => res.json())
     .then(shopifyData => {
-      console.log('Shopify create response:', shopifyData);
-      
       if (!shopifyData.success) {
         throw new Error(shopifyData.error || 'Product creation failed');
       }
@@ -323,8 +295,6 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
     })
     .then(res => res.json())
     .then(publishData => {
-      console.log('Shopify publish response:', publishData);
-      
       if (!publishData.success) {
         throw new Error(publishData.error || 'Product publish failed');
       }
@@ -350,10 +320,7 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
           handle: publishData.data?.handle,
           price: price?.amount,
           sku: publicData?.barcode_UPC,
-          imageUrl: imageArray[0]?.attributes?.variants?.['listing-card']?.url
-            || imageArray[0]?.attributes?.variants?.['scaled-small']?.url
-            || imageArray[0]?.url
-            || null,
+          imageUrl: shopifyData.data?.imageUrl || imageArray[0]?.url || null,
         },
       };
 
@@ -381,27 +348,37 @@ export const requestPublishListingDraft = listingId => (dispatch, getState, sdk)
 // Images return imageId which we need to map with previously generated temporary id
 export const uploadImageThunk = createAsyncThunk(
   'EditListingPage/uploadImage',
-  ({ actionPayload, listingImageConfig }, { rejectWithValue, extra: sdk }) => {
-    const imageVariantInfo = getImageVariantInfo(listingImageConfig);
-    const queryParams = {
-      expand: true,
-      'fields.image': imageVariantInfo.fieldsImage,
-      ...imageVariantInfo.imageVariants,
-    };
+  async ({ actionPayload }, { rejectWithValue }) => {
+    const { id, file } = actionPayload;
 
-    return sdk.images
-      .upload({ image: actionPayload.file }, queryParams)
-      .then(resp => {
-        const img = resp.data.data;
-        // Uploaded image has an existing id that refers to file
-        // The UUID was created as a consequence of this upload call - it's saved to imageId property
-        return {
-          data: { ...img, id: actionPayload.id, imageId: img.id, file: actionPayload.file },
-        };
-      })
-      .catch(e => {
-        return rejectWithValue({ id: actionPayload.id, error: storableError(e) });
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = () => reject(new Error('Failed to read file'));
+        reader.readAsDataURL(file);
       });
+
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageData: base64,
+          mimeType: file.type,
+          vendorId: 'anonymous',
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!data.success) throw new Error(data.error || 'Upload failed');
+
+      return { id, imageId: id, url: data.url, file };
+
+    } catch (error) {
+      console.error('Image upload failed:', error.message);
+      return rejectWithValue({ id, error: storableError(error) });
+    }
   }
 );
 // Backward compatible wrappers for the thunks
@@ -723,21 +700,12 @@ const editListingPageSlice = createSlice({
         state.listingDraft = null;
       })
       .addCase(createListingDraftThunk.fulfilled, (state, action) => {
-        console.log('createListingDraftThunk.fulfilled fired:', {
-          payload: action.payload,
-          stateBeforeUpdate: state.listingDraft,
-        });
-
         const updatedImagesState = updateUploadedImagesState(state, action.payload.data);
         state.uploadedImages = updatedImagesState.uploadedImages;
         state.uploadedImagesOrder = updatedImagesState.uploadedImagesOrder;
         state.createListingDraftInProgress = false;
         state.submittedListingId = action.payload.data.data.id;
         state.listingDraft = action.payload.data.data;
-
-        console.log('createListingDraftThunk.fulfilled after update:', {
-          listingDraft: state.listingDraft,
-        });
       })
       .addCase(createListingDraftThunk.rejected, (state, action) => {
         state.createListingDraftInProgress = false;
@@ -774,23 +742,13 @@ const editListingPageSlice = createSlice({
         state.updateListingError = null;
       })
       .addCase(updateListingThunk.fulfilled, (state, action) => {
-        console.log('updateListingThunk.fulfilled fired with:', {
-          actionPayload: action.payload,
-          currentDraft: state.listingDraft,
-        });
-
-        // Update the listingDraft with the new data from this tab
         if (state.listingDraft && action.payload?.response?.data?.data?.attributes) {
           const newAttributes = action.payload.response.data.data.attributes;
-
           state.listingDraft.attributes = {
             ...state.listingDraft.attributes,
             ...newAttributes,
           };
-
-          console.log('Draft updated with new attributes:', state.listingDraft.attributes);
         }
-
         state.updateInProgress = false;
       })
       .addCase(updateListingThunk.rejected, (state, action) => {
@@ -804,21 +762,11 @@ const editListingPageSlice = createSlice({
       .addCase(showListingThunk.fulfilled, (state, action) => {
         const listingIdFromPayload = action.payload.data.data.id;
 
-        console.log('showListingThunk.fulfilled fired:', {
-          listingIdFromPayload,
-          isDraft: listingIdFromPayload?.uuid?.startsWith('draft-'),
-          currentListingDraft: state.listingDraft,
-          currentState: state,
-        });
-
         // For draft listings, preserve all state including listingDraft
         if (listingIdFromPayload?.uuid && listingIdFromPayload.uuid.startsWith('draft-')) {
-          console.log('Preserving draft state');
           state.listingId = listingIdFromPayload;
           return;
         }
-
-        console.log('Resetting state for real listing');
 
         // For real listings, reset state as before but preserve listingDraft
         const { listingId, allExceptions, weeklyExceptionQueries, monthlyExceptionQueries, listingDraft } = state;
@@ -855,9 +803,8 @@ const editListingPageSlice = createSlice({
         state.uploadImageError = null;
       })
       .addCase(uploadImageThunk.fulfilled, (state, action) => {
-        // payload.data: { id: 'tempId', imageId: 'some-real-id', attributes, type }
-        const { id, ...rest } = action.payload.data;
-        state.uploadedImages[id] = { id, ...rest };
+        const { id, imageId, url, file } = action.payload;
+        state.uploadedImages[id] = { id, imageId, url, file };
       })
       .addCase(uploadImageThunk.rejected, (state, action) => {
         const { id, error } = action.payload;
