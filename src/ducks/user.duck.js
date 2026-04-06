@@ -23,7 +23,12 @@ const formatSupabaseUser = supabaseUser => {
         displayName: metadata.display_name || supabaseUser.email?.split('@')[0] || '',
         firstName: metadata.first_name || '',
         lastName: metadata.last_name || '',
-        abbreviatedName: (metadata.display_name || supabaseUser.email || '')[0]?.toUpperCase() || '',
+        abbreviatedName: (() => {
+          const parts = (metadata.display_name || '').trim().split(/\s+/).filter(Boolean);
+          if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+          if (parts.length === 1) return parts[0][0].toUpperCase();
+          return (supabaseUser.email || '')[0]?.toUpperCase() || '';
+        })(),
         bio: profile.bio || null,
         publicData: profile.publicData || {},
         privateData: profile.privateData || {},
@@ -31,7 +36,25 @@ const formatSupabaseUser = supabaseUser => {
         metadata: {},
       },
       createdAt: supabaseUser.created_at ? new Date(supabaseUser.created_at) : null,
+      state: 'active',
       permissions: { postListings: { allowed: true }, initiateTransactions: { allowed: true } },
+    },
+    relationships: {
+      effectivePermissionSet: {
+        data: {
+          id: { uuid: 'default-permission-set' },
+          type: 'permissionSet',
+        },
+      },
+    },
+    effectivePermissionSet: {
+      id: { uuid: 'default-permission-set' },
+      type: 'permissionSet',
+      attributes: {
+        postListings: 'permission/allow',
+        initiateTransactions: 'permission/allow',
+        viewData: 'permission/allow',
+      },
     },
   };
 };

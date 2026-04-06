@@ -18,6 +18,8 @@ import { mergeConfig } from './util/configHelpers';
 import { IntlProvider } from './util/reactIntl';
 import { includeCSSProperties } from './util/style';
 import { IncludeScripts } from './util/includeScripts';
+import { setTokens } from './util/authTokens';
+import { fetchCurrentUser } from './ducks/user.duck';
 
 import { MaintenanceMode } from './components';
 
@@ -208,9 +210,32 @@ const EnvironmentVariableWarning = props => {
  * @param {Object} props.hostedConfig
  * @returns {JSX.Element}
  */
+// Handle Supabase auth callback: parse tokens from URL hash on first load
+let authCallbackHandled = false;
+const handleSupabaseAuthCallback = store => {
+  if (authCallbackHandled || typeof window === 'undefined') return;
+  authCallbackHandled = true;
+
+  const hash = window.location.hash;
+  if (!hash || !hash.includes('access_token=')) return;
+
+  const params = new URLSearchParams(hash.slice(1)); // strip leading '#'
+  const accessToken = params.get('access_token');
+  const refreshToken = params.get('refresh_token');
+
+  if (accessToken) {
+    setTokens(accessToken, refreshToken);
+    store.dispatch(fetchCurrentUser({ afterLogin: true }));
+    // Remove hash from URL without triggering a navigation
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+};
+
 export const ClientApp = props => {
   const { store, hostedTranslations = {}, hostedConfig = {} } = props;
   const appConfig = mergeConfig(hostedConfig, defaultConfig);
+
+  handleSupabaseAuthCallback(store);
 
   // Show warning on the localhost:3000, if the environment variable key contains "SECRET"
   if (appSettings.dev) {
