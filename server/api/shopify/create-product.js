@@ -8,8 +8,13 @@ const supabase = createClient(
 );
 
 module.exports = async (req, res) => {
+  console.log('Request Content-Type:', req.headers['content-type']);
+  console.log('Full req.body:', JSON.stringify(req.body, null, 2));
+  console.log('req.body.images:', JSON.stringify(req.body.images, null, 2));
+
   try {
     const { vendorId, title, description, price, publicData, images } = req.body;
+    console.log('Raw images from request:', JSON.stringify(images, null, 2));
 
     if (!title || !price) {
       return res.status(400).json({
@@ -47,6 +52,7 @@ module.exports = async (req, res) => {
     ].filter(m => m.value);
 
     // Prepare images — new format: [{ id, url, file }]
+    console.log('Raw images from request:', JSON.stringify(images, null, 2));
     const imageInputs = images?.length > 0
       ? images.map(img => ({ src: img.url })).filter(img => img.src)
       : [];
@@ -97,7 +103,6 @@ module.exports = async (req, res) => {
           publicData?.categoryLevel1,
         ].filter(Boolean),
         metafields,
-        images: imageInputs.length > 0 ? imageInputs : undefined,
       },
     };
 
@@ -202,6 +207,57 @@ module.exports = async (req, res) => {
       }
     }
 
+    // ─── Step 4: Attach images via productCreateMedia (required for API 2024-10+) ───
+    let imageUrl = product.featuredImage?.url || null;
+
+    console.log('Step 4 check - imageInputs:', JSON.stringify(imageInputs));
+    console.log('Step 4 check - imageInputs.length:', imageInputs.length);
+    console.log('Step 4 check - condition (imageInputs.length > 0):', imageInputs.length > 0);
+
+    if (imageInputs.length > 0) {
+      console.log('Step 4: REACHED - starting productCreateMedia...');
+      const createMediaMutation = `
+        mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) {
+          productCreateMedia(productId: $productId, media: $media) {
+            media {
+              ... on MediaImage {
+                image {
+                  url
+                }
+              }
+              mediaContentType
+              status
+            }
+            mediaUserErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      const mediaVariables = {
+        productId: product.id,
+        media: imageInputs.map(img => ({
+          originalSource: img.src,
+          mediaContentType: 'IMAGE',
+        })),
+      };
+
+      console.log('Step 4: Attaching images via productCreateMedia...');
+      const mediaResponse = await shopifyAdminAPI({ query: createMediaMutation, variables: mediaVariables });
+      console.log('Step 4 response:', JSON.stringify(mediaResponse, null, 2));
+
+      if (mediaResponse.data?.productCreateMedia?.mediaUserErrors?.length > 0) {
+        console.warn('Media upload warnings:', mediaResponse.data.productCreateMedia.mediaUserErrors);
+      }
+
+      const firstMedia = mediaResponse.data?.productCreateMedia?.media?.[0];
+      if (firstMedia?.image?.url) {
+        imageUrl = firstMedia.image.url;
+      }
+    }
+
     console.log('Product created successfully:', product.id);
 
     return res.status(200).json({
@@ -211,7 +267,7 @@ module.exports = async (req, res) => {
         title: product.title,
         handle: product.handle,
         status: product.status,
-        imageUrl: product.featuredImage?.url || null,
+        imageUrl,
       },
     });
 

@@ -165,10 +165,9 @@ export const createListingDraftThunk = createAsyncThunk(
     // DON'T create in Shopify yet - just return success
     // This allows the wizard to continue to the next tab
     
-    // Prepare images array
-    const imageArray = images ? Object.values(images).filter(img => img.imageId || img.id) : [];
-
     // Format response to match Sharetribe structure (for compatibility with existing UI)
+    // NOTE: Do NOT include relationships.images here — it causes updateUploadedImagesState
+    // to falsely detect duplicates and wipe uploadedImages from Redux.
     const formattedResponse = {
       data: {
         data: {
@@ -181,11 +180,7 @@ export const createListingDraftThunk = createAsyncThunk(
             publicData: data.publicData,
             state: 'draft',
           },
-          relationships: {
-            images: {
-              data: imageArray.map(img => ({ id: { uuid: img.imageId?.uuid || img.id?.uuid } })),
-            },
-          },
+          relationships: {},
         },
       },
     };
@@ -262,7 +257,12 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
   
   // Get uploaded images from Redux state
   const images = state.EditListingPage.uploadedImages;
-  const imageArray = Object.values(images).filter(img => img.imageId || img.id);
+  console.log('[publish] uploadedImages from state:', JSON.stringify(images));
+  console.log('[publish] uploadedImages keys:', Object.keys(images));
+  const imageArray = Object.values(images)
+    .filter(img => img.url || img.imageUrl)
+    .map(img => ({ id: img.id || img.imageId, url: img.imageUrl || img.url }));
+  console.log('[publish] imageArray being sent:', JSON.stringify(imageArray));
 
   // NOW create the product in Shopify with ALL collected data
   return fetch('/api/shopify/create-product', {
@@ -291,40 +291,40 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
           productId: shopifyData.data.id,
           vendorId,
         }),
-      });
-    })
-    .then(res => res.json())
-    .then(publishData => {
-      if (!publishData.success) {
-        throw new Error(publishData.error || 'Product publish failed');
-      }
+      })
+        .then(res => res.json())
+        .then(publishData => {
+          if (!publishData.success) {
+            throw new Error(publishData.error || 'Product publish failed');
+          }
 
-      // Extract numeric Shopify product ID from GID (e.g. "gid://shopify/Product/12345" → "12345")
-      const shopifyGid = publishData.data?.id || '';
-      const shopifyNumericId = shopifyGid.split('/').pop();
+          // Extract numeric Shopify product ID from GID (e.g. "gid://shopify/Product/12345" → "12345")
+          const shopifyGid = publishData.data?.id || '';
+          const shopifyNumericId = shopifyGid.split('/').pop();
 
-      // Format response
-      const formattedResponse = {
-        data: {
-          data: {
-            id: { uuid: shopifyNumericId },
-            type: 'listing',
-            attributes: {
-              state: 'published',
+          // Format response
+          const formattedResponse = {
+            data: {
+              data: {
+                id: { uuid: shopifyNumericId },
+                type: 'listing',
+                attributes: {
+                  state: 'published',
+                },
+              },
             },
-          },
-        },
-        shopifyProduct: {
-          id: shopifyNumericId,
-          title: publishData.data?.title || title,
-          handle: publishData.data?.handle,
-          price: price?.amount,
-          sku: publicData?.barcode_UPC,
-          imageUrl: shopifyData.data?.imageUrl || imageArray[0]?.url || null,
-        },
-      };
+            shopifyProduct: {
+              id: shopifyNumericId,
+              title: publishData.data?.title || title,
+              handle: publishData.data?.handle,
+              price: price?.amount,
+              sku: publicData?.barcode_UPC,
+              imageUrl: shopifyData.data?.imageUrl || imageArray[0]?.url || null,
+            },
+          };
 
-      return formattedResponse;
+          return formattedResponse;
+        });
     })
     .catch(e => {
       console.error('Publish error:', e);
@@ -768,8 +768,8 @@ const editListingPageSlice = createSlice({
           return;
         }
 
-        // For real listings, reset state as before but preserve listingDraft
-        const { listingId, allExceptions, weeklyExceptionQueries, monthlyExceptionQueries, listingDraft } = state;
+        // For real listings, reset state as before but preserve listingDraft and uploadedImages
+        const { listingId, allExceptions, weeklyExceptionQueries, monthlyExceptionQueries, listingDraft, uploadedImages, uploadedImagesOrder } = state;
         if (listingIdFromPayload?.uuid === state.listingId?.uuid) {
           Object.assign(state, initialState);
           state.listingId = listingId;
@@ -777,10 +777,14 @@ const editListingPageSlice = createSlice({
           state.weeklyExceptionQueries = weeklyExceptionQueries;
           state.monthlyExceptionQueries = monthlyExceptionQueries;
           state.listingDraft = listingDraft;
+          state.uploadedImages = uploadedImages;
+          state.uploadedImagesOrder = uploadedImagesOrder;
         } else {
           Object.assign(state, initialState);
           state.listingId = listingIdFromPayload;
           state.listingDraft = listingDraft;
+          state.uploadedImages = uploadedImages;
+          state.uploadedImagesOrder = uploadedImagesOrder;
         }
       })
       .addCase(showListingThunk.rejected, (state, action) => {
@@ -803,10 +807,13 @@ const editListingPageSlice = createSlice({
         state.uploadImageError = null;
       })
       .addCase(uploadImageThunk.fulfilled, (state, action) => {
+        console.log('[uploadImage] fulfilled - action.payload:', JSON.stringify(action.payload));
         const { id, imageId, url, file } = action.payload;
         state.uploadedImages[id] = { id, imageId, url, file };
+        console.log('[uploadImage] stored at id:', id, '- uploadedImages keys:', Object.keys(state.uploadedImages));
       })
       .addCase(uploadImageThunk.rejected, (state, action) => {
+        console.log('[uploadImage] REJECTED - action.payload:', action.payload);
         const { id, error } = action.payload;
         state.uploadedImagesOrder = state.uploadedImagesOrder.filter(i => i !== id);
         state.uploadedImages = omit(state.uploadedImages, id);

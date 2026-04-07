@@ -222,7 +222,7 @@ export const EditListingPageComponent = () => {
     );
   }
 
-  if (!isUserAuthorized(currentUser)) {
+  if (currentUser?.id && !isUserAuthorized(currentUser)) {
     return (
       <NamedRedirect
         name="NoAccessPage"

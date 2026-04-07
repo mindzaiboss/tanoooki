@@ -23,6 +23,7 @@ const authSignUp = require('./api/auth/signup');
 const authSignIn = require('./api/auth/signin');
 const authSignOut = require('./api/auth/signout');
 const authCurrentUser = require('./api/auth/current-user');
+const authRefresh = require('./api/auth/refresh');
 
 // Shopify API routes
 const createProduct = require('./api/shopify/create-product');
@@ -97,6 +98,7 @@ router.post('/auth/signup', authSignUp);
 router.post('/auth/signin', authSignIn);
 router.post('/auth/signout', authSignOut);
 router.get('/auth/current-user', authCurrentUser);
+router.post('/auth/refresh', authRefresh);
 
 // Shopify API endpoints
 router.post('/shopify/create-product', createProduct);

@@ -4,7 +4,7 @@ import * as log from '../util/log';
 import { LISTING_STATE_DRAFT } from '../util/types';
 import { storableError } from '../util/errors';
 import { isUserAuthorized } from '../util/userHelpers';
-import { getAccessToken } from '../util/authTokens';
+import { getAccessToken, refreshAccessToken } from '../util/authTokens';
 
 import { authInfo } from './auth.duck';
 import { updateStripeConnectAccount } from './stripeConnectAccount.duck';
@@ -165,10 +165,21 @@ const fetchCurrentUserPayloadCreator = (options, thunkAPI) => {
     return Promise.resolve(null);
   }
 
-  return fetch('/api/auth/current-user', {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-    .then(res => {
+  const fetchUser = accessToken =>
+    fetch('/api/auth/current-user', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+  return fetchUser(token)
+    .then(async res => {
+      if (res.status === 401) {
+        // Token expired — try refresh
+        const newToken = await refreshAccessToken();
+        if (!newToken) return null;
+        const retryRes = await fetchUser(newToken);
+        if (!retryRes.ok) return null;
+        return retryRes.json();
+      }
       if (!res.ok) return null;
       return res.json();
     })

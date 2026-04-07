@@ -452,7 +452,7 @@ useEffect(() => {
             images.map(async image => {
               if (image.file) {
                 const base64 = await fileToBase64(image.file);
-                return { data: base64, media_type: image.file.type || 'image/jpeg' };
+                return { data: base64, mediaType: image.file.type || 'image/jpeg' };
               }
               // Fallback: send URL if file not available (e.g. previously saved images)
               return { url: image.url || image.imageUrl };

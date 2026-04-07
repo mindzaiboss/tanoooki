@@ -37,3 +37,25 @@ export const clearTokens = () => {
     // localStorage unavailable
   }
 };
+
+export const refreshAccessToken = async () => {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  try {
+    const res = await fetch('/api/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.access_token) {
+      setTokens(data.access_token, data.refresh_token);
+      return data.access_token;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
