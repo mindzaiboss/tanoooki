@@ -56,7 +56,10 @@ const InboxLink = ({ notificationCount, inboxTab }) => {
   );
 };
 
+const ADMIN_EMAIL = (process.env.REACT_APP_ADMIN_EMAIL || '').toLowerCase();
+
 const ProfileMenu = ({ currentPage, currentUser, onLogout, showManageListingsLink, intl }) => {
+  const isAdmin = ADMIN_EMAIL && currentUser?.attributes?.email?.toLowerCase() === ADMIN_EMAIL;
   const currentPageClass = page => {
     const isAccountSettingsPage =
       page === 'AccountSettingsPage' && ACCOUNT_SETTINGS_PAGES.includes(currentPage);
@@ -103,6 +106,17 @@ const ProfileMenu = ({ currentPage, currentUser, onLogout, showManageListingsLin
             <FormattedMessage id="TopbarDesktop.accountSettingsLink" />
           </NamedLink>
         </MenuItem>
+        {isAdmin ? (
+          <MenuItem key="AdminPage">
+            <NamedLink
+              className={classNames(css.menuLink, currentPageClass('AdminPage'))}
+              name="AdminPage"
+            >
+              <span className={css.menuItemBorder} />
+              Admin
+            </NamedLink>
+          </MenuItem>
+        ) : null}
         <MenuItem key="logout">
           <InlineTextButton rootClassName={css.logoutButton} onClick={onLogout}>
             <span className={css.menuItemBorder} />

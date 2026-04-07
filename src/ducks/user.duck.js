@@ -37,6 +37,7 @@ const formatSupabaseUser = supabaseUser => {
       },
       createdAt: supabaseUser.created_at ? new Date(supabaseUser.created_at) : null,
       state: 'active',
+      status: supabaseUser.accountStatus || 'active',
       permissions: { postListings: { allowed: true }, initiateTransactions: { allowed: true } },
     },
     relationships: {

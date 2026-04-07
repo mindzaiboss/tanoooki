@@ -419,6 +419,7 @@ class EditListingWizard extends Component {
     this.hasScrolledToTab = false;
 
     this.state = {
+      suspendedError: false,
       draftId: null,
       showPayoutDetails: false,
       selectedListingType: null,
@@ -448,6 +449,12 @@ class EditListingWizard extends Component {
   handlePublishListing(id) {
     console.log('handlePublishListing called with id:', id);
     const { onPublishListingDraft, currentUser, stripeAccount, listing, config } = this.props;
+
+    // Block publish for suspended users
+    if (currentUser?.attributes?.status === 'suspended') {
+      this.setState({ suspendedError: true });
+      return;
+    }
 
     // Block publish if shipping is enabled but package dimensions are missing
     const publicData = listing?.attributes?.publicData || {};
@@ -668,10 +675,15 @@ class EditListingWizard extends Component {
       return <NamedRedirect name="EditListingPage" params={pathParams} />;
     }
 
-    const { missingDimensionsError } = this.state;
+    const { missingDimensionsError, suspendedError } = this.state;
 
     return (
       <div className={classes}>
+        {suspendedError ? (
+          <p className={css.missingDimensionsError}>
+            Your account is suspended. You cannot create new listings.
+          </p>
+        ) : null}
         {missingDimensionsError ? (
           <p className={css.missingDimensionsError}>
             Please add package dimensions in the Delivery tab before publishing.

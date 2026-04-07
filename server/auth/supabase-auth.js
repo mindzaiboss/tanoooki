@@ -55,4 +55,19 @@ const refreshSession = async refreshToken => {
   return { data, error };
 };
 
-module.exports = { signUp, signIn, signOut, getCurrentUser, refreshSession };
+const checkUserStatus = async userId => {
+  const { data, error } = await supabase
+    .from('users')
+    .select('status')
+    .eq('id', userId)
+    .single();
+
+  if (error || !data) return { allowed: true, status: 'active' }; // fail open if row missing
+
+  if (data.status === 'banned') {
+    return { allowed: false, status: 'banned', error: 'Your account has been banned.' };
+  }
+  return { allowed: true, status: data.status || 'active' };
+};
+
+module.exports = { signUp, signIn, signOut, getCurrentUser, refreshSession, checkUserStatus };

@@ -1,5 +1,5 @@
 // server/api/auth/current-user.js
-const { getCurrentUser } = require('../../auth/supabase-auth');
+const { getCurrentUser, checkUserStatus } = require('../../auth/supabase-auth');
 
 module.exports = async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -19,5 +19,10 @@ module.exports = async (req, res) => {
     return res.status(401).json({ error: 'User not found' });
   }
 
-  return res.status(200).json({ user: data });
+  const { allowed, error: statusError, status } = await checkUserStatus(data.id);
+  if (!allowed) {
+    return res.status(403).json({ error: statusError });
+  }
+
+  return res.status(200).json({ user: { ...data, accountStatus: status || 'active' } });
 };

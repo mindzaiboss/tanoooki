@@ -235,7 +235,9 @@ export const AuthenticationForms = props => {
 
   const loginErrorMessage = (
     <div className={css.error}>
-      <FormattedMessage id="AuthenticationPage.loginFailed" />
+      {loginError?.message && loginError.message !== 'Login failed'
+        ? loginError.message
+        : <FormattedMessage id="AuthenticationPage.loginFailed" />}
     </div>
   );
 
