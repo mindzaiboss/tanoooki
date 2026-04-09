@@ -1,20 +1,42 @@
 // server/api/shopify/create-product.js
-const { createClient } = require('@supabase/supabase-js');
 const shopifyAdminAPI = require('../shopify-client');
+const { findBrandMetaobject } = require('./brand-metaobject');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// Weight unit: frontend slug → Shopify WeightUnit enum
+const WEIGHT_UNIT_MAP = {
+  lb: 'POUNDS',
+  lbs: 'POUNDS',
+  kg: 'KILOGRAMS',
+  g: 'GRAMS',
+  oz: 'OUNCES',
+};
+
+const CONDITION_MAP = {
+  'new-sealed': 'New / Sealed',
+  'opened-used': 'Opened / Used',
+};
+
+// Frontend slug → Shopify enum choice (must match Shopify metafield definition exactly)
+const EDITION_MAP = {
+  'standard_edition': 'Standard Item',
+  'standard-edition': 'Standard Item',
+  'limited_edition': 'Limited Edition',
+  'limited-edition': 'Limited Edition',
+  'convention_exclusive': 'Convention Exclusive',
+  'convention-exclusive': 'Convention Exclusive',
+  'artist_proof': 'Artist Proof',
+  'artist-proof': 'Artist Proof',
+  'signed_autographed': 'Signed / Autographed',
+  'signed-autographed': 'Signed / Autographed',
+};
 
 module.exports = async (req, res) => {
-  console.log('Request Content-Type:', req.headers['content-type']);
-  console.log('Full req.body:', JSON.stringify(req.body, null, 2));
-  console.log('req.body.images:', JSON.stringify(req.body.images, null, 2));
+  console.log('=== CREATE PRODUCT ROUTE HIT ===');
+  console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
 
   try {
-    const { vendorId, title, description, price, publicData, images } = req.body;
-    console.log('Raw images from request:', JSON.stringify(images, null, 2));
+    const { vendorId, vendorUsername, title, description, price, publicData, images } = req.body;
 
     if (!title || !price) {
       return res.status(400).json({
@@ -23,41 +45,47 @@ module.exports = async (req, res) => {
       });
     }
 
-    // TEMPORARY: Use fake vendor for testing
-    const vendor = {
-      id: vendorId || 'test-vendor-123',
-      name: 'Test Vendor',
-      product_count: 0,
-      product_limit: 100,
-    };
+    // Resolve brand name → metaobject GID
+    const brandGid = publicData?.brand ? await findBrandMetaobject(publicData.brand) : null;
+    console.log(`[create-product] brand "${publicData?.brand}" → GID: ${brandGid}`);
 
-    // Prepare metafields
+    // Map condition slug → Shopify display value
+    const conditionValue = CONDITION_MAP[publicData?.itemcondition] || publicData?.itemcondition || '';
+    if (publicData?.itemcondition && !CONDITION_MAP[publicData.itemcondition]) {
+      console.warn('Unknown condition value:', publicData.itemcondition);
+    }
+
+    // Map edition slug → Shopify enum choice
+    const rawEdition = publicData?.edition_size_exclusivity || publicData?.edition || '';
+    const editionValue = EDITION_MAP[rawEdition] || '';
+    if (rawEdition && !EDITION_MAP[rawEdition]) {
+      console.warn('Unknown edition value:', rawEdition);
+    }
+
+    // includes_* are enum fields in Shopify with choices ["Yes", "No"]
+    const includesOriginalPackaging = publicData?.original_packaging_included === 'yes-original-packaging' ? 'Yes' : 'No';
+    const includesCard = (publicData?.includes_card === true || publicData?.includes_card === 'true') ? 'Yes' : 'No';
+
     const metafields = [
-      { namespace: 'custom', key: 'vendor_id', value: vendor.id, type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'vendor_name', value: vendor.name || 'Vendor', type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'brand', value: publicData?.brand || '', type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'series', value: publicData?.series || '', type: 'single_line_text_field' },
+      brandGid
+        ? { namespace: 'custom', key: 'brand', value: brandGid, type: 'metaobject_reference' }
+        : null,
       { namespace: 'custom', key: 'artist', value: publicData?.artist || '', type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'condition', value: publicData?.itemcondition || '', type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'edition', value: publicData?.edition || '', type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'barcode', value: publicData?.barcode_UPC || '', type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'original_packaging', value: publicData?.original_packaging_included || '', type: 'single_line_text_field' },
+      { namespace: 'custom', key: 'series_collection', value: publicData?.series_collection || publicData?.series || '', type: 'single_line_text_field' },
+      editionValue ? { namespace: 'custom', key: 'edition_size_exclusivity', value: editionValue, type: 'single_line_text_field' } : null,
+      { namespace: 'custom', key: 'condition', value: conditionValue, type: 'single_line_text_field' },
       { namespace: 'custom', key: 'condition_notes', value: publicData?.condition_notes || '', type: 'multi_line_text_field' },
-      { namespace: 'shipping', key: 'weight', value: publicData?.packageWeight?.toString() || '', type: 'number_decimal' },
-      { namespace: 'shipping', key: 'weight_unit', value: publicData?.packageWeightUnit || 'kg', type: 'single_line_text_field' },
-      { namespace: 'shipping', key: 'length', value: publicData?.packageLength?.toString() || '', type: 'number_decimal' },
-      { namespace: 'shipping', key: 'width', value: publicData?.packageWidth?.toString() || '', type: 'number_decimal' },
-      { namespace: 'shipping', key: 'height', value: publicData?.packageHeight?.toString() || '', type: 'number_decimal' },
-      { namespace: 'shipping', key: 'distance_unit', value: publicData?.packageDistanceUnit || 'cm', type: 'single_line_text_field' },
-    ].filter(m => m.value);
+      { namespace: 'custom', key: 'includes_original_packaging', value: includesOriginalPackaging, type: 'single_line_text_field' },
+      { namespace: 'custom', key: 'includes_card', value: includesCard, type: 'single_line_text_field' },
+      { namespace: 'custom', key: 'fulfillment_method', value: 'Fulfilled by Seller', type: 'single_line_text_field' },
+    ].filter(m => m && m.value && m.value !== 'false');
 
-    // Prepare images — new format: [{ id, url, file }]
-    console.log('Raw images from request:', JSON.stringify(images, null, 2));
-    const imageInputs = images?.length > 0
-      ? images.map(img => ({ src: img.url })).filter(img => img.src)
-      : [];
+    // Prepare images
+    const imageInputs = (images || [])
+      .map(img => ({ src: img.url }))
+      .filter(img => img.src);
 
-    // ─── Step 1: Create product (without variants — required for API 2024-10+) ───
+    // ─── Step 1: Create product ───
     const createMutation = `
       mutation productCreate($input: ProductInput!) {
         productCreate(input: $input) {
@@ -66,25 +94,18 @@ module.exports = async (req, res) => {
             title
             handle
             status
-            featuredImage {
-              url
-              altText
-            }
+            vendor
+            featuredImage { url }
             variants(first: 1) {
               edges {
                 node {
                   id
-                  inventoryItem {
-                    id
-                  }
+                  inventoryItem { id }
                 }
               }
             }
           }
-          userErrors {
-            field
-            message
-          }
+          userErrors { field message }
         }
       }
     `;
@@ -93,27 +114,42 @@ module.exports = async (req, res) => {
       input: {
         title,
         descriptionHtml: description || '',
-        vendor: publicData?.brand || vendor.name || 'Tanoooki',
+        vendor: vendorUsername || 'Tanoooki',
         productType: publicData?.categoryLevel1 || 'Designer Toys',
         status: 'DRAFT',
         tags: [
           'tanoooki',
           publicData?.brand,
-          publicData?.series,
+          publicData?.series_collection || publicData?.series,
           publicData?.categoryLevel1,
         ].filter(Boolean),
         metafields,
       },
     };
 
+    console.log('=== CREATE PRODUCT DEBUG ===');
+    console.log('productType:', publicData?.categoryLevel1);
+    console.log('barcode:', publicData?.barcode_UPC);
+    console.log('metafields:', JSON.stringify(metafields, null, 2));
+    console.log('vendor:', vendorUsername);
+
     console.log('Step 1: Creating Shopify product...');
+    console.log('Step 1 variables:', JSON.stringify(createVariables, null, 2));
     const createResponse = await shopifyAdminAPI({ query: createMutation, variables: createVariables });
-    console.log('Step 1 response:', JSON.stringify(createResponse, null, 2));
+    console.log('Step 1 raw response:', JSON.stringify(createResponse, null, 2));
+
+    if (!createResponse.data?.productCreate) {
+      console.error('Step 1: unexpected response shape:', JSON.stringify(createResponse, null, 2));
+      return res.status(500).json({ success: false, error: 'Unexpected Shopify response' });
+    }
 
     if (createResponse.data.productCreate.userErrors.length > 0) {
+      const userErrors = createResponse.data.productCreate.userErrors;
+      console.error('Step 1 userErrors:', JSON.stringify(userErrors, null, 2));
       return res.status(400).json({
         success: false,
-        errors: createResponse.data.productCreate.userErrors,
+        error: userErrors.map(e => `${e.field}: ${e.message}`).join('; '),
+        errors: userErrors,
       });
     }
 
@@ -123,143 +159,113 @@ module.exports = async (req, res) => {
     const inventoryItemId = defaultVariant?.inventoryItem?.id;
 
     if (!variantId) {
-      return res.status(500).json({
-        success: false,
-        error: 'No default variant returned from productCreate',
-      });
+      return res.status(500).json({ success: false, error: 'No default variant returned from productCreate' });
     }
 
-    // ─── Step 2: Update price, SKU, inventoryPolicy on the default variant ───
+    // ─── Step 2: Update variant — price, SKU, barcode, weight ───
+    const weightValue = publicData?.pub_packageWeight ?? publicData?.packageWeight ?? null;
+    const weightUnitRaw = publicData?.pub_packageWeightUnit || publicData?.packageWeightUnit || 'lb';
+    const weightUnit = WEIGHT_UNIT_MAP[weightUnitRaw] || 'POUNDS';
+
+    const variantInput = {
+      id: variantId,
+      price: (parseFloat(price) / 100).toFixed(2),
+      barcode: publicData?.barcode_UPC || '',
+      inventoryItem: {
+        sku: publicData?.barcode_UPC || `TAN-${Date.now()}`,
+        tracked: true,
+        ...(weightValue != null ? {
+          measurement: {
+            weight: { value: parseFloat(weightValue), unit: weightUnit },
+          },
+        } : {}),
+      },
+      inventoryPolicy: 'DENY',
+    };
+
     const updateVariantMutation = `
       mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
         productVariantsBulkUpdate(productId: $productId, variants: $variants) {
           productVariants {
             id
-            inventoryItem {
-              id
-            }
+            inventoryItem { id }
           }
-          userErrors {
-            field
-            message
-          }
+          userErrors { field message }
         }
       }
     `;
 
-    const updateVariantVariables = {
-      productId: product.id,
-      variants: [{
-        id: variantId,
-        price: (parseFloat(price) / 100).toFixed(2),
-        inventoryItem: {
-          sku: publicData?.barcode_UPC || `TAN-${Date.now()}`,
-        },
-        inventoryPolicy: 'DENY',
-      }],
-    };
-
-    console.log('Step 2: Updating default variant price/SKU...');
-    const updateVariantResponse = await shopifyAdminAPI({ query: updateVariantMutation, variables: updateVariantVariables });
-    console.log('Step 2 response:', JSON.stringify(updateVariantResponse, null, 2));
+    console.log('Step 2: Updating variant price/SKU/weight...');
+    const updateVariantResponse = await shopifyAdminAPI({
+      query: updateVariantMutation,
+      variables: { productId: product.id, variants: [variantInput] },
+    });
 
     if (updateVariantResponse.data.productVariantsBulkUpdate.userErrors.length > 0) {
+      console.error('Step 2 userErrors:', updateVariantResponse.data.productVariantsBulkUpdate.userErrors);
       return res.status(400).json({
         success: false,
         errors: updateVariantResponse.data.productVariantsBulkUpdate.userErrors,
       });
     }
 
-    // ─── Step 3: Set inventory quantity via inventoryAdjustQuantities ───
+    // ─── Step 3: Set inventory quantity ───
     if (inventoryItemId) {
       const adjustInventoryMutation = `
         mutation inventoryAdjustQuantities($input: InventoryAdjustQuantitiesInput!) {
           inventoryAdjustQuantities(input: $input) {
-            inventoryAdjustmentGroup {
-              id
-            }
-            userErrors {
-              field
-              message
-            }
+            inventoryAdjustmentGroup { id }
+            userErrors { field message }
           }
         }
       `;
-
-      const adjustInventoryVariables = {
-        input: {
-          reason: 'correction',
-          name: 'available',
-          changes: [{
-            inventoryItemId,
-            locationId: 'gid://shopify/Location/49650771',
-            delta: 1,
-          }],
-        },
-      };
-
       console.log('Step 3: Setting inventory quantity...');
-      const adjustResponse = await shopifyAdminAPI({ query: adjustInventoryMutation, variables: adjustInventoryVariables });
-      console.log('Step 3 response:', JSON.stringify(adjustResponse, null, 2));
-
+      const adjustResponse = await shopifyAdminAPI({
+        query: adjustInventoryMutation,
+        variables: {
+          input: {
+            reason: 'correction',
+            name: 'available',
+            changes: [{ inventoryItemId, locationId: 'gid://shopify/Location/49650771', delta: 1 }],
+          },
+        },
+      });
       if (adjustResponse.data.inventoryAdjustQuantities.userErrors.length > 0) {
         console.warn('Inventory adjustment warnings:', adjustResponse.data.inventoryAdjustQuantities.userErrors);
       }
     }
 
-    // ─── Step 4: Attach images via productCreateMedia (required for API 2024-10+) ───
+    // ─── Step 4: Attach images ───
     let imageUrl = product.featuredImage?.url || null;
-
-    console.log('Step 4 check - imageInputs:', JSON.stringify(imageInputs));
-    console.log('Step 4 check - imageInputs.length:', imageInputs.length);
-    console.log('Step 4 check - condition (imageInputs.length > 0):', imageInputs.length > 0);
-
     if (imageInputs.length > 0) {
-      console.log('Step 4: REACHED - starting productCreateMedia...');
       const createMediaMutation = `
         mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) {
           productCreateMedia(productId: $productId, media: $media) {
             media {
-              ... on MediaImage {
-                image {
-                  url
-                }
-              }
+              ... on MediaImage { image { url } }
               mediaContentType
               status
             }
-            mediaUserErrors {
-              field
-              message
-            }
+            mediaUserErrors { field message }
           }
         }
       `;
-
-      const mediaVariables = {
-        productId: product.id,
-        media: imageInputs.map(img => ({
-          originalSource: img.src,
-          mediaContentType: 'IMAGE',
-        })),
-      };
-
-      console.log('Step 4: Attaching images via productCreateMedia...');
-      const mediaResponse = await shopifyAdminAPI({ query: createMediaMutation, variables: mediaVariables });
-      console.log('Step 4 response:', JSON.stringify(mediaResponse, null, 2));
-
+      console.log('Step 4: Attaching images...');
+      const mediaResponse = await shopifyAdminAPI({
+        query: createMediaMutation,
+        variables: {
+          productId: product.id,
+          media: imageInputs.map(img => ({ originalSource: img.src, mediaContentType: 'IMAGE' })),
+        },
+      });
       if (mediaResponse.data?.productCreateMedia?.mediaUserErrors?.length > 0) {
         console.warn('Media upload warnings:', mediaResponse.data.productCreateMedia.mediaUserErrors);
       }
-
       const firstMedia = mediaResponse.data?.productCreateMedia?.media?.[0];
-      if (firstMedia?.image?.url) {
-        imageUrl = firstMedia.image.url;
-      }
+      if (firstMedia?.image?.url) imageUrl = firstMedia.image.url;
     }
 
     console.log('Product created successfully:', product.id);
-
     return res.status(200).json({
       success: true,
       data: {
@@ -272,10 +278,11 @@ module.exports = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Create product error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    console.error('=== CREATE PRODUCT ERROR ===');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Full error:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
 };

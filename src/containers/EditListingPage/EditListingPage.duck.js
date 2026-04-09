@@ -97,10 +97,30 @@ export const showListingThunk = createAsyncThunk(
       throw new Error(`Draft ${listingId.uuid} not found in Redux state`);
     }
 
-    // For existing listings, fetch from Shopify (TODO: implement)
+    // For existing listings, fetch from Shopify
+    const res = await fetch(`/api/shopify/products/${listingId.uuid}`);
+    if (!res.ok) throw new Error(`Failed to fetch product ${listingId.uuid}`);
+    const json = await res.json();
+    if (!json.success) throw new Error(json.error || 'Product fetch failed');
+
+    const p = json.data;
     return {
       data: {
-        data: { id: listingId, attributes: {}, relationships: {} },
+        data: {
+          id: { uuid: p.id },
+          type: 'ownListing',
+          attributes: {
+            title: p.title,
+            description: p.description,
+            price: p.price ? { amount: p.price, currency: 'USD' } : null,
+            state: p.status === 'ACTIVE' ? 'published' : 'draft',
+            publicData: p.publicData || {},
+            privateData: {
+              shopifyVariantId: p.variantId || null,
+            },
+          },
+          images: p.images || [],
+        },
         included: [],
       },
     };
@@ -204,29 +224,50 @@ export const requestCreateListingDraft = (data, config) => (dispatch, getState, 
 // NOTE: We DON'T update Shopify yet - just update Redux state
 export const updateListingThunk = createAsyncThunk(
   'EditListingPage/updateListing',
-  ({ tab, data, config }, { dispatch, getState, rejectWithValue, extra: sdk }) => {
+  async ({ tab, data }, { rejectWithValue, getState }) => {
     const { id, stockUpdate, images, ...rest } = data;
+    const isEditMode = !!(id?.uuid && !String(id?.uuid).startsWith('draft-'));
 
-    // DON'T update Shopify yet - just update Redux state
-    // The product will be created when user publishes
+    // For edit mode, persist changes to Shopify immediately
+    if (isEditMode) {
+      const shopifyProductId = id?.uuid;
+      // Get variantId from listingDraft (stored when we fetched the product)
+      const listingDraft = getState().EditListingPage.listingDraft;
+      const variantId = listingDraft?.attributes?.privateData?.shopifyVariantId || null;
+      const res = await fetch('/api/shopify/update-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          productId: `gid://shopify/Product/${shopifyProductId}`,
+          title: rest.title,
+          description: rest.description,
+          price: rest.price?.amount,
+          variantId,
+          publicData: rest.publicData,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) {
+        return rejectWithValue(storableError(new Error(json.error || 'Update failed')));
+      }
+    }
 
-    // Format response
     const formattedResponse = {
       data: {
         data: {
           id: id,
           type: 'listing',
-          attributes: rest, // Use rest instead of hardcoding fields
+          attributes: rest,
         },
       },
     };
 
-    return Promise.resolve({ response: formattedResponse, tab });
+    return { response: formattedResponse, tab };
   }
 );
 // Backward compatible wrappers for the thunks
-export const requestUpdateListing = (tab, data, config) => (dispatch, getState, sdk) => {
-  return dispatch(updateListingThunk({ tab, data, config }))
+export const requestUpdateListing = (tab, data) => (dispatch, getState, sdk) => {
+  return dispatch(updateListingThunk({ tab, data }))
     .unwrap()
     .then(({ response, tab }) => {
       return response;
@@ -241,6 +282,7 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
   const state = getState();
   const currentUser = state.user.currentUser;
   const vendorId = currentUser?.id?.uuid;
+  const vendorUsername = 'test_seller'; // TODO: Replace with actual username from user profile
 
   // Get the draft listing data from Redux state
   const listingDraft = state.EditListingPage.listingDraft;
@@ -254,6 +296,7 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
   const description = listingDraft?.attributes?.description;
   const publicData = listingDraft?.attributes?.publicData || {};
   const price = listingDraft?.attributes?.price; // From pricing tab
+  console.log('[publish] publicData at publish time:', JSON.stringify(publicData, null, 2));
   
   // Get uploaded images from Redux state
   const images = state.EditListingPage.uploadedImages;
@@ -263,6 +306,7 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
     .filter(img => img.url || img.imageUrl)
     .map(img => ({ id: img.id || img.imageId, url: img.imageUrl || img.url }));
   console.log('[publish] imageArray being sent:', JSON.stringify(imageArray));
+  console.log('[publish] vendorUsername:', vendorUsername);
 
   // NOW create the product in Shopify with ALL collected data
   return fetch('/api/shopify/create-product', {
@@ -270,20 +314,25 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       vendorId,
+      vendorUsername,
       title,
       description,
-      price: price?.amount, // Should have price by now
+      price: price?.amount,
       publicData,
       images: imageArray,
     }),
   })
     .then(res => res.json())
     .then(shopifyData => {
+      console.log('[publish] create-product response:', JSON.stringify(shopifyData));
       if (!shopifyData.success) {
-        throw new Error(shopifyData.error || 'Product creation failed');
+        const errMsg = shopifyData.error || (shopifyData.errors ? JSON.stringify(shopifyData.errors) : 'Product creation failed');
+        console.error('[publish] create-product failed:', errMsg);
+        throw new Error(errMsg);
       }
 
       // Immediately publish the product (set to ACTIVE)
+      console.log('[publish] shopifyData.data.id:', shopifyData.data.id);
       return fetch('/api/shopify/publish-product', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -315,8 +364,8 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
             },
             shopifyProduct: {
               id: shopifyNumericId,
-              title: publishData.data?.title || title,
-              handle: publishData.data?.handle,
+              title: shopifyData.data?.title || title,
+              handle: shopifyData.data?.handle,
               price: price?.amount,
               sku: publicData?.barcode_UPC,
               imageUrl: shopifyData.data?.imageUrl || imageArray[0]?.url || null,
@@ -671,6 +720,20 @@ const editListingPageSlice = createSlice({
     clearPublishError: state => {
       state.publishListingError = null;
     },
+    resetWizard: state => {
+      state.listingDraft = null;
+      state.uploadedImages = {};
+      state.uploadedImagesOrder = [];
+      state.submittedListingId = null;
+      state.listingId = null;
+      state.publishSuccess = false;
+      state.publishedProduct = null;
+      state.redirectToListing = false;
+      state.publishListingError = null;
+      state.createListingDraftError = null;
+      state.updateListingError = null;
+      state.updatedTab = null;
+    },
     removeListingImage: (state, action) => {
       const id = action.payload;
 
@@ -717,10 +780,14 @@ const editListingPageSlice = createSlice({
         state.publishListingError = null;
       })
       .addCase(publishListingThunk.fulfilled, (state, action) => {
-        state.redirectToListing = true;
         state.publishSuccess = true;
         state.publishedProduct = action.payload?.shopifyProduct || null;
+        // Clear all wizard state — next listing starts fresh
         state.listingDraft = null;
+        state.uploadedImages = {};
+        state.uploadedImagesOrder = [];
+        state.submittedListingId = null;
+        state.listingId = null;
         state.createListingDraftError = null;
         state.updateListingError = null;
         state.showListingsError = null;
@@ -744,9 +811,17 @@ const editListingPageSlice = createSlice({
       .addCase(updateListingThunk.fulfilled, (state, action) => {
         if (state.listingDraft && action.payload?.response?.data?.data?.attributes) {
           const newAttributes = action.payload.response.data.data.attributes;
+          // Deep-merge publicData so each tab's fields accumulate rather than overwrite.
+          // Without this, the Delivery tab's { shippingEnabled, pub_packageWeight, ... }
+          // would replace the Details tab's { brand, series, condition, ... } entirely.
+          const mergedPublicData = {
+            ...(state.listingDraft.attributes.publicData || {}),
+            ...(newAttributes.publicData || {}),
+          };
           state.listingDraft.attributes = {
             ...state.listingDraft.attributes,
             ...newAttributes,
+            publicData: mergedPublicData,
           };
         }
         state.updateInProgress = false;
@@ -782,7 +857,8 @@ const editListingPageSlice = createSlice({
         } else {
           Object.assign(state, initialState);
           state.listingId = listingIdFromPayload;
-          state.listingDraft = listingDraft;
+          // Store fetched listing as listingDraft so the wizard can populate from it
+          state.listingDraft = action.payload.data.data;
           state.uploadedImages = uploadedImages;
           state.uploadedImagesOrder = uploadedImagesOrder;
         }
@@ -944,6 +1020,7 @@ export const {
   clearUpdatedTab,
   clearPublishError,
   removeListingImage,
+  resetWizard,
 } = editListingPageSlice.actions;
 export default editListingPageSlice.reducer;
 

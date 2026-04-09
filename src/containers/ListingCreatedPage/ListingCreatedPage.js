@@ -1,8 +1,9 @@
-import React from 'react';
-import { useSelector } from 'react-redux';
-import { useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { useLocation, useParams } from 'react-router-dom';
 
 import { isScrollingDisabled } from '../../ducks/ui.duck';
+import { resetWizard } from '../EditListingPage/EditListingPage.duck';
 import { Page, LayoutSingleColumn, NamedLink } from '../../components';
 import TopbarContainer from '../TopbarContainer/TopbarContainer';
 import FooterContainer from '../FooterContainer/FooterContainer';
@@ -11,10 +12,21 @@ import css from './ListingCreatedPage.module.css';
 
 const ListingCreatedPage = () => {
   const scrollingDisabled = useSelector(isScrollingDisabled);
+  const dispatch = useDispatch();
   const location = useLocation();
+  const { productId } = useParams();
 
-  const { title, price, imageUrl } = location.state || {};
+  // Reset wizard state on mount so the next "New Listing" starts fresh
+  useEffect(() => {
+    dispatch(resetWizard());
+  }, [dispatch]);
+
+  const { title, price, imageUrl, handle } = location.state || {};
   const formattedPrice = price ? `$${(parseFloat(price) / 100).toFixed(2)}` : null;
+
+  // Edit URL: /l/:slug/:id/edit/details
+  const editSlug = handle || 'listing';
+  const editId = productId;
 
   return (
     <Page title="Listing Created" scrollingDisabled={scrollingDisabled}>
@@ -53,9 +65,15 @@ const ListingCreatedPage = () => {
               <NamedLink name="NewListingPage" className={css.primaryButton}>
                 Create Another Listing
               </NamedLink>
-              <NamedLink name="NewListingPage" className={css.secondaryButton}>
-                Edit Listing
-              </NamedLink>
+              {editId ? (
+                <NamedLink
+                  name="EditListingPage"
+                  params={{ slug: editSlug, id: editId, type: 'edit', tab: 'details' }}
+                  className={css.secondaryButton}
+                >
+                  Edit Listing
+                </NamedLink>
+              ) : null}
             </div>
           </div>
         </div>

@@ -323,13 +323,16 @@ const EditListingDetailsPanel = props => {
   const categoryKey = config.categoryConfiguration.key;
 
   const { hasExistingListingType, existingListingTypeInfo } = hasSetListingType(publicData);
+  const isEditMode = pathParams?.type === 'edit';
   const hasValidExistingListingType =
-    hasExistingListingType &&
-    !!listingTypes.find(conf => {
-      const listinTypesMatch = conf.listingType === existingListingTypeInfo.listingType;
-      const unitTypesMatch = conf.transactionType?.unitType === existingListingTypeInfo.unitType;
-      return listinTypesMatch && unitTypesMatch;
-    });
+    // In edit mode, Shopify listings are always treated as valid
+    isEditMode ||
+    (hasExistingListingType &&
+      !!listingTypes.find(conf => {
+        const listinTypesMatch = conf.listingType === existingListingTypeInfo.listingType;
+        const unitTypesMatch = conf.transactionType?.unitType === existingListingTypeInfo.unitType;
+        return listinTypesMatch && unitTypesMatch;
+      }));
 
   const validPreselectedListingType =
     pathParams?.type === LISTING_PAGE_PARAM_TYPE_NEW && !!locationSearch?.listingType

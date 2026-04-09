@@ -10,11 +10,14 @@ const supabase = createClient(
 module.exports = async (req, res) => {
   try {
     const { productId, vendorId } = req.body;
+    console.log('=== PUBLISH PRODUCT CALLED ===');
+    console.log('productId:', productId, '| vendorId:', vendorId);
 
-    if (!productId || !vendorId) {
+    if (!productId) {
+      console.error('PUBLISH PRODUCT ERROR: Missing productId');
       return res.status(400).json({
         success: false,
-        error: 'Missing productId or vendorId',
+        error: 'Missing productId',
       });
     }
 
@@ -49,12 +52,14 @@ module.exports = async (req, res) => {
       });
     }
 
-    // Update status in Supabase
-    await supabase
-      .from('vendor_products')
-      .update({ status: 'active' })
-      .eq('shopify_product_id', productId)
-      .eq('vendor_id', vendorId);
+    // Update status in Supabase (only if vendorId is available)
+    if (vendorId) {
+      await supabase
+        .from('vendor_products')
+        .update({ status: 'active' })
+        .eq('shopify_product_id', productId)
+        .eq('vendor_id', vendorId);
+    }
 
     return res.status(200).json({
       success: true,

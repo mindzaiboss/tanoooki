@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async';
 // Import configs and util modules
 import {
   LISTING_PAGE_PARAM_TYPE_DRAFT,
+  LISTING_PAGE_PARAM_TYPE_EDIT,
   LISTING_PAGE_PARAM_TYPE_NEW,
 } from '../../../util/urlHelpers';
 import { ensureListing } from '../../../util/data';
@@ -133,6 +134,7 @@ const EditListingWizardTab = props => {
   const isNewListingFlow = isNewURI || isDraftURI;
 
   const currentListing = ensureListing(listing);
+  const isEditURI = type === LISTING_PAGE_PARAM_TYPE_EDIT;
 
   // New listing flow has automatic redirects to new tab on the wizard
   // and the last panel calls publishListing API endpoint.
@@ -165,12 +167,14 @@ const EditListingWizardTab = props => {
   };
 
   const onCompleteEditListingWizardTab = (tab, updateValues) => {
+    // In edit mode (type === 'edit'), always call onUpdateListing — never create a draft
     const hasDraftId = !!currentListing.id;
-    const onUpdateListingOrCreateListingDraft = !hasDraftId
+    const forceUpdate = isEditURI;
+    const onUpdateListingOrCreateListingDraft = (!hasDraftId && !forceUpdate)
       ? (tab, values) => onCreateListingDraft(values, config)
       : (tab, values) => onUpdateListing(tab, values, config);
 
-    const updateListingValues = !hasDraftId
+    const updateListingValues = (!hasDraftId && !forceUpdate)
       ? updateValues
       : { ...updateValues, id: currentListing.id };
 

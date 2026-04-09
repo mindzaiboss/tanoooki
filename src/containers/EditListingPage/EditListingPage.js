@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { bool, func, object, shape, string, oneOf } from 'prop-types';
 import { useParams, useHistory, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
@@ -8,6 +8,7 @@ import { intlShape, useIntl } from '../../util/reactIntl';
 import { types as sdkTypes } from '../../util/sdkLoader';
 import {
   LISTING_PAGE_PARAM_TYPE_DRAFT,
+  LISTING_PAGE_PARAM_TYPE_EDIT,
   LISTING_PAGE_PARAM_TYPE_NEW,
   LISTING_PAGE_PARAM_TYPES,
   LISTING_PAGE_PENDING_APPROVAL_VARIANT,
@@ -43,6 +44,7 @@ import {
   requestImageUpload,
   removeListingImage,
   savePayoutDetails,
+  resetWizard,
 } from './EditListingPage.duck';
 import EditListingWizard from './EditListingWizard/EditListingWizard';
 import css from './EditListingPage.module.css';
@@ -153,19 +155,26 @@ export const EditListingPageComponent = () => {
   const fetchInProgress = createStripeAccountInProgress;
 
   // Resolve own listing from marketplace entities
-  const currentListing = useSelector(state => {
-    const submittedId = state.EditListingPage.submittedListingId;
-    const listingId = submittedId || (routerParams.id ? new UUID(routerParams.id) : null);
+  const submittedListingId = useSelector(state => state.EditListingPage.submittedListingId);
+  const listingDraft = useSelector(state => state.EditListingPage.listingDraft);
+  const marketplaceEntities = useSelector(state => state.marketplaceData.entities);
 
-    // For draft listings, return from listingDraft in Redux
-    if (listingId && routerParams.type === LISTING_PAGE_PARAM_TYPE_DRAFT && state.EditListingPage.listingDraft) {
-      return ensureOwnListing(state.EditListingPage.listingDraft);
+  const currentListing = useMemo(() => {
+    const listingId = submittedListingId || (routerParams.id ? new UUID(routerParams.id) : null);
+
+    // For draft and edit listings, return from listingDraft in Redux
+    if (listingId && listingDraft &&
+        (routerParams.type === LISTING_PAGE_PARAM_TYPE_DRAFT ||
+         routerParams.type === LISTING_PAGE_PARAM_TYPE_EDIT)) {
+      return ensureOwnListing(listingDraft);
     }
 
     if (!listingId) return ensureOwnListing(null);
-    const listings = getMarketplaceEntities(state, [{ id: listingId, type: 'ownListing' }]);
-    return ensureOwnListing(listings.length === 1 ? listings[0] : null);
-  });
+
+    const ownListings = marketplaceEntities?.ownListing || {};
+    const match = Object.values(ownListings).find(l => l?.id?.uuid === listingId.uuid);
+    return ensureOwnListing(match || null);
+  }, [submittedListingId, listingDraft, marketplaceEntities, routerParams.id, routerParams.type]);
 
   // Dispatch-based action creators
   const onFetchExceptions = params => dispatch(requestFetchAvailabilityExceptions(params));
@@ -189,9 +198,24 @@ export const EditListingPageComponent = () => {
   const onRemoveListingImage = imageId => dispatch(removeListingImage(imageId));
 
   const { id, type, returnURLType } = routerParams;
+
+  console.log('=== EditListingPage Debug ===');
+  console.log('type:', type, '| id:', id);
+  console.log('currentListing:', currentListing);
+  console.log('listingDraft:', listingDraft);
+  console.log('submittedListingId:', submittedListingId);
+  console.log('========================');
+
   const isNewURI = type === LISTING_PAGE_PARAM_TYPE_NEW;
   const isDraftURI = type === LISTING_PAGE_PARAM_TYPE_DRAFT;
   const isNewListingFlow = isNewURI || isDraftURI;
+
+  // Reset wizard state whenever a brand-new listing is started
+  useEffect(() => {
+    if (isNewURI) {
+      dispatch(resetWizard());
+    }
+  }, [isNewURI, dispatch]);
 
   const listingId = page.submittedListingId || (id ? new UUID(id) : null);
   const currentListingState = currentListing?.attributes?.state || null;
@@ -217,9 +241,16 @@ export const EditListingPageComponent = () => {
           title: page.publishedProduct.title,
           price: page.publishedProduct.price,
           imageUrl: page.publishedProduct.imageUrl,
+          handle: page.publishedProduct.handle,
         }}
       />
     );
+  }
+
+  // Show loading state while fetching an existing listing
+  const isEditMode = type === LISTING_PAGE_PARAM_TYPE_EDIT;
+  if (isEditMode && !currentListing?.id) {
+    return <Page title="Loading..." scrollingDisabled={false}><div style={{ padding: '40px', textAlign: 'center' }}>Loading listing...</div></Page>;
   }
 
   if (currentUser?.id && !isUserAuthorized(currentUser)) {
