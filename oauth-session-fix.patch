@@ -1,0 +1,115 @@
+From e0d68f05b10d45e71b511bfbf63baef0df844687 Mon Sep 17 00:00:00 2001
+From: "Chris Tsang (via Claude)" <chris@mindzai.com>
+Date: Thu, 9 Apr 2026 15:53:37 +0000
+Subject: [PATCH] Fix OAuth session handling - store tokens in localStorage
+
+ISSUE: OAuth authentication worked but frontend didn't recognize logged-in state
+ROOT CAUSE: OAuth handler stored tokens in httpOnly cookies, but frontend uses localStorage
+
+FIXES:
+- Updated loginWithSupabaseOAuth.js to use temporary session cookie (not httpOnly)
+- Added OAuth session detection in AuthenticationPage useEffect
+- Frontend now reads session cookie, stores tokens in localStorage, and fetches current user
+- Tokens are now consistent between email/password and OAuth flows
+
+RESULT: OAuth login should now work end-to-end with proper session recognition
+---
+ server/api/auth/loginWithSupabaseOAuth.js     | 21 +++++++---------
+ .../AuthenticationPage/AuthenticationPage.js  | 25 ++++++++++++++++++-
+ 2 files changed, 33 insertions(+), 13 deletions(-)
+
+diff --git a/server/api/auth/loginWithSupabaseOAuth.js b/server/api/auth/loginWithSupabaseOAuth.js
+index 79030f16a..cdc6d70be 100644
+--- a/server/api/auth/loginWithSupabaseOAuth.js
++++ b/server/api/auth/loginWithSupabaseOAuth.js
+@@ -105,19 +105,16 @@ module.exports = async (err, user, req, res, provider) => {
+       return res.redirect(`${rootUrl}${defaultConfirm}#`);
+     }
+ 
+-    // Successfully authenticated - store tokens in cookies
+-    // Using the same cookie names as email/password auth for consistency
+-    res.cookie('supabase-access-token', data.session.access_token, {
+-      httpOnly: true,
++    // Successfully authenticated - store session info in a cookie that the frontend can read
++    // The frontend will pick this up and store tokens in localStorage
++    res.cookie('st-auth-session', JSON.stringify({
++      access_token: data.session.access_token,
++      refresh_token: data.session.refresh_token,
++      user: data.user,
++    }), {
++      httpOnly: false, // Frontend needs to read this
+       secure: process.env.NODE_ENV === 'production',
+-      maxAge: 60 * 60 * 1000, // 1 hour
+-      sameSite: 'lax',
+-    });
+-
+-    res.cookie('supabase-refresh-token', data.session.refresh_token, {
+-      httpOnly: true,
+-      secure: process.env.NODE_ENV === 'production',
+-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
++      maxAge: 5 * 60 * 1000, // 5 minutes - just long enough for frontend to pick it up
+       sameSite: 'lax',
+     });
+ 
+diff --git a/src/containers/AuthenticationPage/AuthenticationPage.js b/src/containers/AuthenticationPage/AuthenticationPage.js
+index 62d2f9426..7046f9e3d 100644
+--- a/src/containers/AuthenticationPage/AuthenticationPage.js
++++ b/src/containers/AuthenticationPage/AuthenticationPage.js
+@@ -22,9 +22,10 @@ import { pickUserFieldsData, addScopePrefix } from '../../util/userHelpers';
+ 
+ import { login, authenticationInProgress, signup, signupWithIdp } from '../../ducks/auth.duck';
+ import { isScrollingDisabled, manageDisableScrolling } from '../../ducks/ui.duck';
+-import { sendVerificationEmail } from '../../ducks/user.duck';
++import { sendVerificationEmail, fetchCurrentUser } from '../../ducks/user.duck';
+ import { fetchFeaturedListings } from '../../ducks/featuredListings.duck';
+ import { getListingsById } from '../../ducks/marketplaceData.duck';
++import { setTokens } from '../../util/authTokens';
+ 
+ import {
+   Page,
+@@ -532,6 +533,26 @@ export const AuthenticationPageComponent = props => {
+     if (authError) {
+       Cookies.remove('st-autherror');
+     }
++
++    // Handle OAuth redirect - check for session cookie set by backend
++    const oauthSession = Cookies.get('st-auth-session');
++    if (oauthSession) {
++      try {
++        const sessionData = JSON.parse(oauthSession);
++        // Store tokens in localStorage so the app recognizes the user as logged in
++        setTokens(sessionData.access_token, sessionData.refresh_token);
++        // Remove the temporary cookie
++        Cookies.remove('st-auth-session');
++        // Fetch current user to update Redux state
++        if (typeof onFetchCurrentUser === 'function') {
++          onFetchCurrentUser({ afterLogin: true });
++        }
++      } catch (e) {
++        console.error('Failed to parse OAuth session cookie:', e);
++        Cookies.remove('st-auth-session');
++      }
++    }
++
+     setMounted(true);
+   }, []);
+ 
+@@ -557,6 +578,7 @@ export const AuthenticationPageComponent = props => {
+     sendVerificationEmailInProgress,
+     sendVerificationEmailError,
+     onResendVerificationEmail,
++    onFetchCurrentUser,
+     onManageDisableScrolling,
+     pageAssetsData,
+     pageAssetsFetchInProgress,
+@@ -769,6 +791,7 @@ const mapDispatchToProps = dispatch => ({
+   submitSignup: params => dispatch(signup(params)),
+   submitSingupWithIdp: params => dispatch(signupWithIdp(params)),
+   onResendVerificationEmail: () => dispatch(sendVerificationEmail()),
++  onFetchCurrentUser: options => dispatch(fetchCurrentUser(options)),
+   onManageDisableScrolling: (componentId, disableScrolling) =>
+     dispatch(manageDisableScrolling(componentId, disableScrolling)),
+   onFetchFeaturedListings: (sectionId, parentPage, listingImageConfig, allSections) =>
+-- 
+2.43.0
+

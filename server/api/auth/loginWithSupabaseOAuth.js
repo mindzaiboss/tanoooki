@@ -105,19 +105,16 @@ module.exports = async (err, user, req, res, provider) => {
       return res.redirect(`${rootUrl}${defaultConfirm}#`);
     }
 
-    // Successfully authenticated - store tokens in cookies
-    // Using the same cookie names as email/password auth for consistency
-    res.cookie('supabase-access-token', data.session.access_token, {
-      httpOnly: true,
+    // Successfully authenticated - store session info in a cookie that the frontend can read
+    // The frontend will pick this up and store tokens in localStorage
+    res.cookie('st-auth-session', JSON.stringify({
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+      user: data.user,
+    }), {
+      httpOnly: false, // Frontend needs to read this
       secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 1000, // 1 hour
-      sameSite: 'lax',
-    });
-
-    res.cookie('supabase-refresh-token', data.session.refresh_token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      maxAge: 5 * 60 * 1000, // 5 minutes - just long enough for frontend to pick it up
       sameSite: 'lax',
     });
 

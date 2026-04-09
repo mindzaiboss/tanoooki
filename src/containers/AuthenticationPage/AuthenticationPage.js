@@ -22,9 +22,10 @@ import { pickUserFieldsData, addScopePrefix } from '../../util/userHelpers';
 
 import { login, authenticationInProgress, signup, signupWithIdp } from '../../ducks/auth.duck';
 import { isScrollingDisabled, manageDisableScrolling } from '../../ducks/ui.duck';
-import { sendVerificationEmail } from '../../ducks/user.duck';
+import { sendVerificationEmail, fetchCurrentUser } from '../../ducks/user.duck';
 import { fetchFeaturedListings } from '../../ducks/featuredListings.duck';
 import { getListingsById } from '../../ducks/marketplaceData.duck';
+import { setTokens } from '../../util/authTokens';
 
 import {
   Page,
@@ -532,6 +533,26 @@ export const AuthenticationPageComponent = props => {
     if (authError) {
       Cookies.remove('st-autherror');
     }
+
+    // Handle OAuth redirect - check for session cookie set by backend
+    const oauthSession = Cookies.get('st-auth-session');
+    if (oauthSession) {
+      try {
+        const sessionData = JSON.parse(oauthSession);
+        // Store tokens in localStorage so the app recognizes the user as logged in
+        setTokens(sessionData.access_token, sessionData.refresh_token);
+        // Remove the temporary cookie
+        Cookies.remove('st-auth-session');
+        // Fetch current user to update Redux state
+        if (typeof onFetchCurrentUser === 'function') {
+          onFetchCurrentUser({ afterLogin: true });
+        }
+      } catch (e) {
+        console.error('Failed to parse OAuth session cookie:', e);
+        Cookies.remove('st-auth-session');
+      }
+    }
+
     setMounted(true);
   }, []);
 
@@ -557,6 +578,7 @@ export const AuthenticationPageComponent = props => {
     sendVerificationEmailInProgress,
     sendVerificationEmailError,
     onResendVerificationEmail,
+    onFetchCurrentUser,
     onManageDisableScrolling,
     pageAssetsData,
     pageAssetsFetchInProgress,
@@ -769,6 +791,7 @@ const mapDispatchToProps = dispatch => ({
   submitSignup: params => dispatch(signup(params)),
   submitSingupWithIdp: params => dispatch(signupWithIdp(params)),
   onResendVerificationEmail: () => dispatch(sendVerificationEmail()),
+  onFetchCurrentUser: options => dispatch(fetchCurrentUser(options)),
   onManageDisableScrolling: (componentId, disableScrolling) =>
     dispatch(manageDisableScrolling(componentId, disableScrolling)),
   onFetchFeaturedListings: (sectionId, parentPage, listingImageConfig, allSections) =>
