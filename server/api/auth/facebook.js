@@ -1,6 +1,6 @@
 const passport = require('passport');
 const passportFacebook = require('passport-facebook');
-const loginWithIdp = require('./loginWithIdp');
+const loginWithSupabaseOAuth = require('./loginWithSupabaseOAuth');
 
 const radix = 10;
 const PORT = parseInt(process.env.REACT_APP_DEV_API_SERVER_PORT, radix);
@@ -32,13 +32,13 @@ const strategyOptions = {
  *
  * Normally with Passport, this function is used to validate the received user data, and possibly
  * create a new user and the `done` callback is a session management function provided by Passport.
- * In our case, the Sharetribe SDK handles user creation and session management. Therefore, we only
+ * In our case, Supabase handles user creation and session management. Therefore, we only
  * extract user data here and provide a custom session management function in
- * `authenticateFacebookCallback`, that servers as the `done` callback here.
+ * `authenticateFacebookCallback`, that serves as the `done` callback here.
  *
  * @param {Object} req Express request object
  * @param {String} accessToken Access token obtained from Facebook
- * @param {String} refreshToken Refres token obtained from Facebook
+ * @param {String} refreshToken Refresh token obtained from Facebook
  * @param {Object} profile Object containing user information
  * @param {Function} done Session management function, introduced in `authenticateFacebookCallback`
  */
@@ -93,7 +93,7 @@ exports.authenticateFacebook = (req, res, next) => {
 
 /**
  * This function is called when user returns to this application after authenticating with
- * Facebook. Passport verifies the recieved tokens and calls a callback function that we've defined
+ * Facebook. Passport verifies the received tokens and calls a callback function that we've defined
  * for the authentication strategy and an additional session management function, that we introduce
  * in this function.
  *
@@ -104,11 +104,11 @@ exports.authenticateFacebook = (req, res, next) => {
 exports.authenticateFacebookCallback = (req, res, next) => {
   // We've already defined the `verifyCallback` function for the Passport Facebook authentication
   // strategy. That function is normally used to verify the user information obtained from identity
-  // provider, or alternatively create a new use while an internal Passport function is used to
-  // store the user data into session. In our case however, we use the SDK to manage sessions.
+  // provider, or alternatively create a new user while an internal Passport function is used to
+  // store the user data into session. In our case however, we use Supabase to manage sessions.
   // Therefore, we provide an additional session management function here, that is called from the
   // `verifyCallback` fn.
-  const sessionFn = (err, user) => loginWithIdp(err, user, req, res, clientID, 'facebook');
+  const sessionFn = (err, user) => loginWithSupabaseOAuth(err, user, req, res, 'facebook');
 
   passport.authenticate('facebook', sessionFn)(req, res, next);
 };

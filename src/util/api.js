@@ -137,12 +137,12 @@ export const transitionPrivileged = body => {
 // If loginWithIdp api call fails and user can't authenticate to Marketplace API with idp
 // we will show option to create a new user with idp.
 // For that user needs to confirm data fetched from the idp.
-// After the confirmation, this endpoint is called to create a new user with confirmed data.
+// After the confirmation, this endpoint is called to complete OAuth signup with confirmed data.
 //
-// See `server/api/auth/createUserWithIdp.js` to see what data should
+// See `server/api/auth/confirmOAuthSignup.js` to see what data should
 // be sent in the body.
 export const createUserWithIdp = body => {
-  return post('/api/auth/create-user-with-idp', body);
+  return post('/api/auth/confirm-oauth-signup', body);
 };
 
 // Check if user can be deleted and then delete the user. Endpoint logic

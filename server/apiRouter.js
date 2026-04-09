@@ -45,6 +45,7 @@ const transitionPrivileged = require('./api/transition-privileged');
 const deleteAccount = require('./api/delete-account');
 
 const createUserWithIdp = require('./api/auth/createUserWithIdp');
+const confirmOAuthSignup = require('./api/auth/confirmOAuthSignup');
 
 const { authenticateFacebook, authenticateFacebookCallback } = require('./api/auth/facebook');
 const { authenticateGoogle, authenticateGoogleCallback } = require('./api/auth/google');
@@ -114,7 +115,8 @@ router.get('/shopify/products/:productId', getProduct);
 // Create user with identity provider (e.g. Facebook or Google)
 // This endpoint is called to create a new user after user has confirmed
 // they want to continue with the data fetched from IdP (e.g. name and email)
-router.post('/auth/create-user-with-idp', createUserWithIdp);
+router.post('/auth/create-user-with-idp', createUserWithIdp); // OLD - Sharetribe SDK (deprecated)
+router.post('/auth/confirm-oauth-signup', confirmOAuthSignup); // NEW - Supabase OAuth
 
 // Facebook authentication endpoints
 
@@ -123,7 +125,7 @@ router.get('/auth/facebook', authenticateFacebook);
 
 // This is the route for callback URL the user is redirected after authenticating
 // with Facebook. In this route a Passport.js custom callback is used for calling
-// loginWithIdp endpoint in Sharetribe Auth API to authenticate user to the marketplace
+// Supabase OAuth to authenticate user to the marketplace
 router.get('/auth/facebook/callback', authenticateFacebookCallback);
 
 // Google authentication endpoints
@@ -133,7 +135,7 @@ router.get('/auth/google', authenticateGoogle);
 
 // This is the route for callback URL the user is redirected after authenticating
 // with Google. In this route a Passport.js custom callback is used for calling
-// loginWithIdp endpoint in Sharetribe Auth API to authenticate user to the marketplace
+// Supabase OAuth to authenticate user to the marketplace
 router.get('/auth/google/callback', authenticateGoogleCallback);
 
 module.exports = router;

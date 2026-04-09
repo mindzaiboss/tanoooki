@@ -144,15 +144,22 @@ const signupThunk = createAsyncThunk(
 
 const signupWithIdpThunk = createAsyncThunk(
   'auth/signupWithIdp',
-  (params, thunkAPI) => {
+  async (params, thunkAPI) => {
     const { rejectWithValue, dispatch } = thunkAPI;
-    return createUserWithIdp(params)
-      .then(() => dispatch(fetchCurrentUser({ afterLogin: true })))
-      .then(() => params)
-      .catch(e => {
-        log.error(e, 'create-user-with-idp-failed', { params });
-        return rejectWithValue(storableError(e));
-      });
+    try {
+      const response = await createUserWithIdp(params);
+      
+      // The Supabase OAuth endpoint returns { user, session }
+      if (response.session) {
+        setTokens(response.session.access_token, response.session.refresh_token);
+      }
+      
+      await dispatch(fetchCurrentUser({ afterLogin: true }));
+      return params;
+    } catch (e) {
+      log.error(e, 'create-user-with-idp-failed', { params });
+      return rejectWithValue(storableError(e));
+    }
   },
   {
     condition: (_, { getState }) => {
