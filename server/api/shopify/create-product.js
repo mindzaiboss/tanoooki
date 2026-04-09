@@ -1,42 +1,115 @@
 // server/api/shopify/create-product.js
 const shopifyAdminAPI = require('../shopify-client');
-const { findBrandMetaobject } = require('./brand-metaobject');
 
-// Weight unit: frontend slug → Shopify WeightUnit enum
+async function findOrCreateBrandMetaobject(brandName) {
+  if (!brandName) return null;
+
+  // Search for existing brand metaobject by name field
+  const searchResult = await shopifyAdminAPI({
+    query: `
+      query searchBrands($query: String!) {
+        metaobjects(type: "brand", first: 1, query: $query) {
+          edges {
+            node {
+              id
+              handle
+              fields { key value }
+            }
+          }
+        }
+      }
+    `,
+    variables: { query: `name:${brandName}` },
+  });
+
+  const existing = searchResult.data?.metaobjects?.edges?.[0]?.node;
+  if (existing) {
+    console.log(`[brand] found existing metaobject: ${existing.id}`);
+    return existing.id;
+  }
+
+  // Not found — create it
+  const createResult = await shopifyAdminAPI({
+    query: `
+      mutation createBrand($metaobject: MetaobjectCreateInput!) {
+        metaobjectCreate(metaobject: $metaobject) {
+          metaobject { id handle }
+          userErrors { field message }
+        }
+      }
+    `,
+    variables: {
+      metaobject: {
+        type: 'brand',
+        fields: [{ key: 'name', value: brandName }],
+      },
+    },
+  });
+
+  const errors = createResult.data?.metaobjectCreate?.userErrors;
+  if (errors?.length > 0) {
+    console.error('[brand] failed to create metaobject:', errors);
+    return null;
+  }
+
+  const created = createResult.data.metaobjectCreate.metaobject;
+  console.log(`[brand] created new metaobject: ${created.id}`);
+  return created.id;
+}
+
+// Frontend category display name → slug
+const CATEGORY_DISPLAY_NAMES = {
+  'blind-boxes': 'Blind Boxes',
+  'figures-collectibles': 'Figures & Collectibles',
+  'plush': 'Plush',
+  'tcg-trading-cards': 'TCG & Trading Cards',
+  'accessories': 'Accessories',
+  'other': 'Other',
+};
+
+// Weight unit slug → Shopify WeightUnit enum
 const WEIGHT_UNIT_MAP = {
-  lb: 'POUNDS',
-  lbs: 'POUNDS',
-  kg: 'KILOGRAMS',
-  g: 'GRAMS',
-  oz: 'OUNCES',
+  'lb': 'POUNDS',
+  'oz': 'OUNCES',
+  'kg': 'KILOGRAMS',
+  'g': 'GRAMS',
 };
 
-const CONDITION_MAP = {
-  'new-sealed': 'New / Sealed',
-  'opened-used': 'Opened / Used',
-};
-
-// Frontend slug → Shopify enum choice (must match Shopify metafield definition exactly)
-const EDITION_MAP = {
+// Edition slug → Shopify enum value
+const EDITION_VALUE_MAP = {
   'standard_edition': 'Standard Item',
-  'standard-edition': 'Standard Item',
   'limited_edition': 'Limited Edition',
-  'limited-edition': 'Limited Edition',
   'convention_exclusive': 'Convention Exclusive',
-  'convention-exclusive': 'Convention Exclusive',
   'artist_proof': 'Artist Proof',
-  'artist-proof': 'Artist Proof',
-  'signed_autographed': 'Signed / Autographed',
-  'signed-autographed': 'Signed / Autographed',
+  'signed': 'Signed / Autographed',
+};
+
+// Frontend category slug → Shopify standard taxonomy GID (Toys & Games tree)
+const SHOPIFY_CATEGORY_MAP = {
+  'blind-boxes': 'gid://shopify/TaxonomyCategory/tg-5-8',
+  'figures-collectibles': 'gid://shopify/TaxonomyCategory/tg-5-8-1-1',
+  'plush': 'gid://shopify/TaxonomyCategory/tg-5-8-6',
+  'tcg-trading-cards': 'gid://shopify/TaxonomyCategory/ae-2-2-3-2',
+  'art-toys': 'gid://shopify/TaxonomyCategory/tg-5-8-1-1',
+  'vinyl-figures': 'gid://shopify/TaxonomyCategory/tg-5-8-1-1',
+  'designer-toys': 'gid://shopify/TaxonomyCategory/tg-5-8-1-1',
+  // 'accessories' - intentionally no mapping (catch-all)
+  // 'other' - intentionally no mapping (catch-all)
 };
 
 module.exports = async (req, res) => {
   console.log('=== CREATE PRODUCT ROUTE HIT ===');
-  console.log('Request headers:', JSON.stringify(req.headers, null, 2));
   console.log('Request body:', JSON.stringify(req.body, null, 2));
 
   try {
-    const { vendorId, vendorUsername, title, description, price, publicData, images } = req.body;
+    const {
+      vendorUsername,
+      title,
+      description,
+      price,
+      images,
+      publicData,
+    } = req.body;
 
     if (!title || !price) {
       return res.status(400).json({
@@ -45,40 +118,35 @@ module.exports = async (req, res) => {
       });
     }
 
-    // Resolve brand name → metaobject GID
-    const brandGid = publicData?.brand ? await findBrandMetaobject(publicData.brand) : null;
-    console.log(`[create-product] brand "${publicData?.brand}" → GID: ${brandGid}`);
+    // Extract category from publicData.categoryLevel1
+    const categorySlug = publicData?.categoryLevel1;
+    const categoryGid = SHOPIFY_CATEGORY_MAP[categorySlug] || null;
+    const productType = CATEGORY_DISPLAY_NAMES[categorySlug] || 'Designer Toys';
 
-    // Map condition slug → Shopify display value
-    const conditionValue = CONDITION_MAP[publicData?.itemcondition] || publicData?.itemcondition || '';
-    if (publicData?.itemcondition && !CONDITION_MAP[publicData.itemcondition]) {
-      console.warn('Unknown condition value:', publicData.itemcondition);
-    }
-
-    // Map edition slug → Shopify enum choice
-    const rawEdition = publicData?.edition_size_exclusivity || publicData?.edition || '';
-    const editionValue = EDITION_MAP[rawEdition] || '';
-    if (rawEdition && !EDITION_MAP[rawEdition]) {
-      console.warn('Unknown edition value:', rawEdition);
-    }
-
-    // includes_* are enum fields in Shopify with choices ["Yes", "No"]
-    const includesOriginalPackaging = publicData?.original_packaging_included === 'yes-original-packaging' ? 'Yes' : 'No';
-    const includesCard = (publicData?.includes_card === true || publicData?.includes_card === 'true') ? 'Yes' : 'No';
+    // Map publicData fields (no pub_ prefix)
+    const brand = publicData?.brand || '';
+    const brandGid = await findOrCreateBrandMetaobject(brand);
+    const condition = publicData?.itemcondition === 'new-sealed' ? 'New / Sealed'
+      : publicData?.itemcondition === 'opened-used' ? 'Opened / Used'
+      : '';
+    const conditionNotes = publicData?.condition_notes || '';
+    const seriesCollection = publicData?.series_collection || '';
+    const artist = publicData?.artist || '';
+    const editionInfo = EDITION_VALUE_MAP[publicData?.edition_size_exclusivity] || '';
+    const includesOriginalPackaging = publicData?.original_packaging_included === 'yes-original-packaging';
+    const includesCard = publicData?.includes_card === 'true' || publicData?.includes_card === true;
 
     const metafields = [
-      brandGid
-        ? { namespace: 'custom', key: 'brand', value: brandGid, type: 'metaobject_reference' }
-        : null,
-      { namespace: 'custom', key: 'artist', value: publicData?.artist || '', type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'series_collection', value: publicData?.series_collection || publicData?.series || '', type: 'single_line_text_field' },
-      editionValue ? { namespace: 'custom', key: 'edition_size_exclusivity', value: editionValue, type: 'single_line_text_field' } : null,
-      { namespace: 'custom', key: 'condition', value: conditionValue, type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'condition_notes', value: publicData?.condition_notes || '', type: 'multi_line_text_field' },
-      { namespace: 'custom', key: 'includes_original_packaging', value: includesOriginalPackaging, type: 'single_line_text_field' },
-      { namespace: 'custom', key: 'includes_card', value: includesCard, type: 'single_line_text_field' },
+      brandGid ? { namespace: 'custom', key: 'brand', value: brandGid, type: 'metaobject_reference' } : null,
+      condition ? { namespace: 'custom', key: 'condition', value: condition, type: 'single_line_text_field' } : null,
+      conditionNotes ? { namespace: 'custom', key: 'condition_notes', value: conditionNotes, type: 'multi_line_text_field' } : null,
+      seriesCollection ? { namespace: 'custom', key: 'series_collection', value: seriesCollection, type: 'single_line_text_field' } : null,
+      artist ? { namespace: 'custom', key: 'artist', value: artist, type: 'single_line_text_field' } : null,
+      editionInfo ? { namespace: 'custom', key: 'edition_size_exclusivity', value: editionInfo, type: 'single_line_text_field' } : null,
+      { namespace: 'custom', key: 'includes_original_packaging', value: includesOriginalPackaging ? 'Yes' : 'No', type: 'single_line_text_field' },
+      { namespace: 'custom', key: 'includes_card', value: includesCard ? 'Yes' : 'No', type: 'single_line_text_field' },
       { namespace: 'custom', key: 'fulfillment_method', value: 'Fulfilled by Seller', type: 'single_line_text_field' },
-    ].filter(m => m && m.value && m.value !== 'false');
+    ].filter(m => m && m.value);
 
     // Prepare images
     const imageInputs = (images || [])
@@ -115,22 +183,16 @@ module.exports = async (req, res) => {
         title,
         descriptionHtml: description || '',
         vendor: vendorUsername || 'Tanoooki',
-        productType: publicData?.categoryLevel1 || 'Designer Toys',
+        productType,
+        ...(categoryGid ? { category: categoryGid } : {}),
         status: 'DRAFT',
-        tags: [
-          'tanoooki',
-          publicData?.brand,
-          publicData?.series_collection || publicData?.series,
-          publicData?.categoryLevel1,
-        ].filter(Boolean),
+        tags: ['tanoooki', categorySlug, brand || null].filter(Boolean),
         metafields,
       },
     };
 
     console.log('=== CREATE PRODUCT DEBUG ===');
-    console.log('productType:', publicData?.categoryLevel1);
-    console.log('barcode:', publicData?.barcode_UPC);
-    console.log('metafields:', JSON.stringify(metafields, null, 2));
+    console.log('categorySlug:', categorySlug, '| productType:', productType, '| categoryGid:', categoryGid);
     console.log('vendor:', vendorUsername);
 
     console.log('Step 1: Creating Shopify product...');
@@ -163,22 +225,20 @@ module.exports = async (req, res) => {
     }
 
     // ─── Step 2: Update variant — price, SKU, barcode, weight ───
-    const weightValue = publicData?.pub_packageWeight ?? publicData?.packageWeight ?? null;
-    const weightUnitRaw = publicData?.pub_packageWeightUnit || publicData?.packageWeightUnit || 'lb';
-    const weightUnit = WEIGHT_UNIT_MAP[weightUnitRaw] || 'POUNDS';
+    const barcode = publicData?.barcode_UPC || '';
+    const weight = parseFloat(publicData?.pub_packageWeight) || 0;
+    const weightUnit = WEIGHT_UNIT_MAP[publicData?.pub_packageWeightUnit] || 'POUNDS';
 
     const variantInput = {
       id: variantId,
       price: (parseFloat(price) / 100).toFixed(2),
-      barcode: publicData?.barcode_UPC || '',
+      barcode,
       inventoryItem: {
-        sku: publicData?.barcode_UPC || `TAN-${Date.now()}`,
+        sku: `TAN-${Date.now()}`,
         tracked: true,
-        ...(weightValue != null ? {
-          measurement: {
-            weight: { value: parseFloat(weightValue), unit: weightUnit },
-          },
-        } : {}),
+        countryCodeOfOrigin: 'CN',
+        harmonizedSystemCode: '950300',
+        ...(weight > 0 ? { measurement: { weight: { value: weight, unit: weightUnit } } } : {}),
       },
       inventoryPolicy: 'DENY',
     };
