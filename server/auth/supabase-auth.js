@@ -105,36 +105,27 @@ const getOrCreateUserFromOAuth = async (email, firstName, lastName, provider, id
     .eq('id', userId)
     .single();
 
-  // If no profile exists, create one
-  if (!existingProfile) {
-    const displayName = [firstName, lastName].filter(Boolean).join(' ') || email?.split('@')[0] || '';
-    
-    const { data: newProfile, error: profileError } = await supabase
-      .from('users')
-      .insert({
-        id: userId,
-        email,
-        display_name: displayName,
-        first_name: firstName || '',
-        last_name: lastName || '',
-        status: 'active',
-        created_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
+  // Profile exists (trigger auto-created it), but check if it's complete
+  // New users won't have display_name set yet
+  const isProfileComplete = existingProfile?.display_name && existingProfile.display_name.trim().length > 0;
 
-    if (profileError) {
-      return { data: authData, error: profileError, isNewUser: true };
-    }
+  console.log('🔍 Profile check:', {
+    userId,
+    existingProfile: !!existingProfile,
+    isProfileComplete,
+    willReturnIsNewUser: !isProfileComplete,
+  });
 
+  if (!isProfileComplete) {
+    console.log('🟡 Profile incomplete - treating as new user');
     return {
-      data: { ...authData, user: { ...authData.user, profile: newProfile } },
+      data: { ...authData, user: { ...authData.user, profile: existingProfile } },
       error: null,
       isNewUser: true,
     };
   }
 
-  // Existing user
+  console.log('🟢 Profile complete - existing user');
   return {
     data: { ...authData, user: { ...authData.user, profile: existingProfile } },
     error: null,

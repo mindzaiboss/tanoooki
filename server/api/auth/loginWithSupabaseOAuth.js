@@ -14,6 +14,8 @@ const rootUrl = process.env.REACT_APP_MARKETPLACE_ROOT_URL;
  * @param {String} provider - OAuth provider ('google' or 'facebook')
  */
 module.exports = async (err, user, req, res, provider) => {
+  console.log('🔵 OAuth callback hit!', { provider, hasUser: !!user, hasError: !!err });
+
   if (err) {
     log.error(err, 'fetching-user-data-from-idp-failed');
 
@@ -56,6 +58,8 @@ module.exports = async (err, user, req, res, provider) => {
   const { email, firstName, lastName, idpToken, from, defaultReturn, defaultConfirm, userType } = user;
 
   try {
+    console.log('🔵 Attempting Supabase OAuth...', { email, provider });
+
     // Authenticate with Supabase using the OAuth token
     const { data, error, isNewUser } = await getOrCreateUserFromOAuth(
       email,
@@ -66,6 +70,7 @@ module.exports = async (err, user, req, res, provider) => {
     );
 
     if (error) {
+      console.log('🔴 Supabase OAuth failed:', error);
       log.error(error, 'supabase-oauth-auth-failed', { email, provider });
       
       return res
@@ -83,47 +88,35 @@ module.exports = async (err, user, req, res, provider) => {
         .redirect(`${rootUrl}/login#`);
     }
 
-    if (!data?.session) {
-      // No session means we need user confirmation (new user flow)
-      // Store OAuth data in cookie for the confirm page
-      res.cookie(
-        'st-authinfo',
-        {
-          email,
-          firstName,
-          lastName,
-          idpToken,
-          provider,
-          from,
-          userType,
-        },
-        {
-          maxAge: 15 * 60 * 1000, // 15 minutes
-        }
-      );
+    if (isNewUser) {
+      // New user — redirect to profile completion form
+      console.log('🟡 New user detected - redirecting to profile completion');
+      const cookieData = {
+        email,
+        firstName,
+        lastName,
+        idpToken: idpToken || 'oauth-token',
+        idpId: provider, // Frontend expects this field name, not 'provider'
+        from,
+        userType,
+      };
+
+      console.log('🍪 Setting cookie with data:', JSON.stringify(cookieData, null, 2));
+
+      res.cookie('st-authinfo', cookieData, {
+        maxAge: 15 * 60 * 1000, // 15 minutes
+      });
 
       return res.redirect(`${rootUrl}${defaultConfirm}#`);
     }
 
-    // Successfully authenticated - store session info in a cookie that the frontend can read
-    // The frontend will pick this up and store tokens in localStorage
-    res.cookie('st-auth-session', JSON.stringify({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-      user: data.user,
-    }), {
-      httpOnly: false, // Frontend needs to read this
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 5 * 60 * 1000, // 5 minutes - just long enough for frontend to pick it up
-      sameSite: 'lax',
-    });
+    // Existing user — pass tokens via URL hash (standard OAuth pattern)
+    // The frontend handleSupabaseAuthCallback in app.js reads hash-based tokens
+    console.log('🟢 Existing user - logging in with tokens');
+    const targetPath = from || defaultReturn || '/';
+    const tokenHash = `#access_token=${encodeURIComponent(data.session.access_token)}&refresh_token=${encodeURIComponent(data.session.refresh_token)}`;
 
-    // Redirect to the appropriate page
-    if (from) {
-      return res.redirect(`${rootUrl}${from}#`);
-    } else {
-      return res.redirect(`${rootUrl}${defaultReturn}#`);
-    }
+    return res.redirect(`${rootUrl}${targetPath}${tokenHash}`);
   } catch (error) {
     log.error(error, 'oauth-login-exception', { email, provider });
     

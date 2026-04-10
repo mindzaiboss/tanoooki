@@ -212,22 +212,46 @@ const EnvironmentVariableWarning = props => {
  */
 // Handle Supabase auth callback: parse tokens from URL hash on first load
 let authCallbackHandled = false;
+const getCookie = name => {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+};
+
 const handleSupabaseAuthCallback = store => {
   if (authCallbackHandled || typeof window === 'undefined') return;
   authCallbackHandled = true;
 
+  // Method 1: tokens in URL hash (Supabase implicit flow)
   const hash = window.location.hash;
-  if (!hash || !hash.includes('access_token=')) return;
+  if (hash && hash.includes('access_token=')) {
+    const params = new URLSearchParams(hash.slice(1)); // strip leading '#'
+    const accessToken = params.get('access_token');
+    const refreshToken = params.get('refresh_token');
 
-  const params = new URLSearchParams(hash.slice(1)); // strip leading '#'
-  const accessToken = params.get('access_token');
-  const refreshToken = params.get('refresh_token');
+    if (accessToken) {
+      setTokens(accessToken, refreshToken);
+      store.dispatch(fetchCurrentUser({ afterLogin: true }));
+      // Remove hash from URL without triggering a navigation
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    return;
+  }
 
-  if (accessToken) {
-    setTokens(accessToken, refreshToken);
-    store.dispatch(fetchCurrentUser({ afterLogin: true }));
-    // Remove hash from URL without triggering a navigation
-    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  // Method 2: tokens in st-auth-session cookie (OAuth server-side flow)
+  const sessionCookie = getCookie('st-auth-session');
+  if (sessionCookie) {
+    try {
+      const { access_token, refresh_token } = JSON.parse(sessionCookie);
+      if (access_token) {
+        setTokens(access_token, refresh_token);
+        // Delete the temporary cookie
+        document.cookie = 'st-auth-session=; Max-Age=0; path=/';
+        store.dispatch(fetchCurrentUser({ afterLogin: true }));
+      }
+    } catch (e) {
+      console.error('Failed to parse st-auth-session cookie:', e);
+      document.cookie = 'st-auth-session=; Max-Age=0; path=/';
+    }
   }
 };
 

@@ -8,11 +8,29 @@ const log = require('../../log');
  * their profile information from the OAuth provider.
  */
 module.exports = async (req, res) => {
-  const { email, firstName, lastName, idpToken, provider, ...additionalData } = req.body || {};
+  console.log('📝 Confirm OAuth signup request:', JSON.stringify(req.body, null, 2));
+
+  // Email, firstName, lastName are in the cookie, not the request body
+  const authInfo = req.cookies['st-authinfo'];
+  if (!authInfo) {
+    return res.status(400).json({
+      error: 'Missing authentication info. Please start OAuth flow again.',
+    });
+  }
+
+  const { email, firstName, lastName, idpId: cookieIdpId } = authInfo;
+
+  // Get idpToken and idpId from request body
+  const { idpToken, idpId, ...additionalData } = req.body || {};
+
+  // Accept either 'provider' or 'idpId' for backwards compatibility
+  const provider = idpId || cookieIdpId || req.body.provider;
+
+  console.log('🔍 OAuth signup data:', { email, firstName, lastName, provider, hasToken: !!idpToken });
 
   if (!email || !idpToken || !provider) {
-    return res.status(400).json({ 
-      error: 'Missing required fields: email, idpToken, provider' 
+    return res.status(400).json({
+      error: 'Missing required fields: email, idpToken, provider/idpId',
     });
   }
 
