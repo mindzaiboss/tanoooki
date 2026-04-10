@@ -6,14 +6,32 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
-const signUp = async (email, password, displayName) => {
+const signUp = async (email, password, displayName, username, firstName, lastName) => {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: { display_name: displayName },
+      data: { username: displayName, first_name: firstName, last_name: lastName },
     },
   });
+
+  // Save username and names to profile row (created by trigger)
+  if (!error && data?.user && username) {
+    const normalized = username.toLowerCase().trim();
+    await supabase
+      .from('users')
+      .upsert(
+        {
+          id: data.user.id,
+          email,
+          username: normalized,
+          first_name: firstName || '',
+          last_name: lastName || '',
+        },
+        { onConflict: 'id' }
+      );
+  }
+
   return { data, error };
 };
 
@@ -106,8 +124,8 @@ const getOrCreateUserFromOAuth = async (email, firstName, lastName, provider, id
     .single();
 
   // Profile exists (trigger auto-created it), but check if it's complete
-  // New users won't have display_name set yet
-  const isProfileComplete = existingProfile?.display_name && existingProfile.display_name.trim().length > 0;
+  // New users won't have username set yet
+  const isProfileComplete = existingProfile?.username && existingProfile.username.trim().length > 0;
 
   console.log('🔍 Profile check:', {
     userId,

@@ -71,7 +71,7 @@ const AdminPage = () => {
           {users.map(user => (
             <tr key={user.id}>
               <td>{user.email}</td>
-              <td>{user.display_name || '—'}</td>
+              <td>{user.username || '—'}</td>
               <td>
                 <span className={css[`status_${user.status}`]}>
                   {STATUS_LABELS[user.status] || user.status}

@@ -135,11 +135,18 @@ const ConfirmSignupFormComponent = props => (
               />
               {values?.username && usernameValidation.message && (
                 <div style={{
-                  marginTop: '-12px',
-                  marginBottom: '12px',
+                  marginTop: '8px',
+                  marginBottom: '20px',
                   fontSize: '14px',
-                  color: usernameValidation.available === true ? '#2ecc71' :
-                         usernameValidation.available === false ? '#e74c3c' : '#95a5a6',
+                  fontWeight: '500',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  backgroundColor: usernameValidation.available === true ? '#d4edda' :
+                                   usernameValidation.available === false ? '#f8d7da' : '#e2e3e5',
+                  color: usernameValidation.available === true ? '#155724' :
+                         usernameValidation.available === false ? '#721c24' : '#383d41',
+                  border: `1px solid ${usernameValidation.available === true ? '#c3e6cb' :
+                                        usernameValidation.available === false ? '#f5c6cb' : '#d6d8db'}`,
                 }}>
                   {usernameValidation.checking && '⏳ '}
                   {usernameValidation.available === true && '✅ '}

@@ -23,7 +23,7 @@ module.exports = async (req, res) => {
 
   const { data: users, error } = await supabaseAdmin
     .from('users')
-    .select('id, email, display_name, status, created_at')
+    .select('id, email, username, status, created_at')
     .order('created_at', { ascending: false });
 
   if (error) {

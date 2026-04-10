@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
   const { email, firstName, lastName, idpId: cookieIdpId } = authInfo;
 
   // Get idpToken and idpId from request body
-  const { idpToken, idpId, ...additionalData } = req.body || {};
+  const { idpToken, idpId, username, ...additionalData } = req.body || {};
 
   // Accept either 'provider' or 'idpId' for backwards compatibility
   const provider = idpId || cookieIdpId || req.body.provider;
@@ -50,9 +50,32 @@ module.exports = async (req, res) => {
     }
 
     if (!data?.session) {
-      return res.status(401).json({ 
-        error: 'Failed to create session after OAuth confirmation' 
+      return res.status(401).json({
+        error: 'Failed to create session after OAuth confirmation',
       });
+    }
+
+    // Save username, first_name, last_name
+    if (username) {
+      const { createClient } = require('@supabase/supabase-js');
+      const supabase = createClient(
+        process.env.SUPABASE_URL,
+        process.env.SUPABASE_SERVICE_ROLE_KEY
+      );
+      const normalizedUsername = username.toLowerCase().trim();
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          username: normalizedUsername,
+          first_name: firstName || '',
+          last_name: lastName || '',
+        })
+        .eq('id', data.user.id);
+      if (updateError) {
+        console.error('Failed to save user profile:', updateError);
+      } else {
+        console.log('✅ User profile saved:', { username: normalizedUsername, firstName, lastName });
+      }
     }
 
     // Clear the OAuth info cookie since we're done with it

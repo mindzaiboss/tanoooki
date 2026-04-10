@@ -34,7 +34,7 @@ module.exports = async (req, res) => {
     .from('users')
     .update({ status: newStatus })
     .eq('id', userId)
-    .select('id, email, display_name, status, created_at')
+    .select('id, email, username, status, created_at')
     .single();
 
   if (error) {

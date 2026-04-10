@@ -20,11 +20,12 @@ const formatSupabaseUser = supabaseUser => {
       email: supabaseUser.email,
       emailVerified: !!supabaseUser.email_confirmed_at,
       profile: {
-        displayName: metadata.display_name || supabaseUser.email?.split('@')[0] || '',
-        firstName: metadata.first_name || '',
-        lastName: metadata.last_name || '',
+        displayName: metadata.username || supabaseUser.email?.split('@')[0] || '',
+        username: profile.username || metadata.username || '',
+        firstName: profile.first_name || metadata.first_name || '',
+        lastName: profile.last_name || metadata.last_name || '',
         abbreviatedName: (() => {
-          const parts = (metadata.display_name || '').trim().split(/\s+/).filter(Boolean);
+          const parts = (metadata.username || '').trim().split(/\s+/).filter(Boolean);
           if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
           if (parts.length === 1) return parts[0][0].toUpperCase();
           return (supabaseUser.email || '')[0]?.toUpperCase() || '';

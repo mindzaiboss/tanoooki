@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form as FinalForm } from 'react-final-form';
 import arrayMutators from 'final-form-arrays';
 import classNames from 'classnames';
@@ -7,6 +7,7 @@ import { FormattedMessage, useIntl } from '../../../util/reactIntl';
 import { propTypes } from '../../../util/types';
 import * as validators from '../../../util/validators';
 import { getPropsForCustomUserFieldInputs } from '../../../util/userHelpers';
+import { validateUsername } from '../../../util/api';
 
 import { Form, PrimaryButton, FieldTextInput, CustomExtendedDataField } from '../../../components';
 
@@ -52,6 +53,34 @@ const SignupFormComponent = props => (
       } = formRenderProps;
 
       const { userType } = values || {};
+
+      const [usernameValidation, setUsernameValidation] = useState({
+        checking: false,
+        available: null,
+        message: '',
+      });
+
+      const checkUsername = async username => {
+        if (!username || username.length < 3) {
+          setUsernameValidation({ checking: false, available: null, message: '' });
+          return;
+        }
+        setUsernameValidation({ checking: true, available: null, message: 'Checking...' });
+        try {
+          const response = await validateUsername({ username });
+          setUsernameValidation({ checking: false, available: response.available, message: response.message });
+        } catch (error) {
+          setUsernameValidation({ checking: false, available: false, message: 'Could not validate username' });
+        }
+      };
+
+      useEffect(() => {
+        const timeoutId = setTimeout(() => {
+          const username = values?.username;
+          if (username) checkUsername(username);
+        }, 500);
+        return () => clearTimeout(timeoutId);
+      }, [values?.username]);
 
       // email
       const emailRequired = validators.required(
@@ -111,7 +140,8 @@ const SignupFormComponent = props => (
 
       const classes = classNames(rootClassName || css.root, className);
       const submitInProgress = inProgress;
-      const submitDisabled = invalid || submitInProgress || isPasswordUsedMoreThanOnce(values);
+      const submitDisabled = invalid || submitInProgress || isPasswordUsedMoreThanOnce(values) ||
+        (values?.username && !usernameValidation.available);
 
       return (
         <Form className={classes} onSubmit={handleSubmit}>
@@ -124,6 +154,37 @@ const SignupFormComponent = props => (
 
           {showDefaultUserFields ? (
             <div className={css.defaultUserFields}>
+              <FieldTextInput
+                type="text"
+                id={formId ? `${formId}.username` : 'username'}
+                name="username"
+                autoComplete="username"
+                label="Username"
+                placeholder="Choose your username"
+                validate={validators.required('Username is required')}
+              />
+              {values?.username && usernameValidation.message && (
+                <div style={{
+                  marginTop: '8px',
+                  marginBottom: '20px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  padding: '8px 12px',
+                  borderRadius: '4px',
+                  backgroundColor: usernameValidation.available === true ? '#d4edda' :
+                                   usernameValidation.available === false ? '#f8d7da' : '#e2e3e5',
+                  color: usernameValidation.available === true ? '#155724' :
+                         usernameValidation.available === false ? '#721c24' : '#383d41',
+                  border: `1px solid ${usernameValidation.available === true ? '#c3e6cb' :
+                                        usernameValidation.available === false ? '#f5c6cb' : '#d6d8db'}`,
+                }}>
+                  {usernameValidation.checking && '⏳ '}
+                  {usernameValidation.available === true && '✅ '}
+                  {usernameValidation.available === false && '❌ '}
+                  {usernameValidation.message}
+                </div>
+              )}
+
               <FieldTextInput
                 type="email"
                 id={formId ? `${formId}.email` : 'email'}

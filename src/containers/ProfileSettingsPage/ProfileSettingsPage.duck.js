@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { denormalisedResponseEntities } from '../../util/data';
 import { storableError } from '../../util/errors';
-import { setCurrentUser } from '../../ducks/user.duck';
+import { fetchCurrentUser } from '../../ducks/user.duck';
+import { updateUserProfile } from '../../util/api';
 
 // ================ Async Thunks ================ //
 
@@ -40,29 +40,33 @@ export const uploadImage = actionPayload => dispatch => {
 ////////////////////
 export const updateProfileThunk = createAsyncThunk(
   'ProfileSettingsPage/updateProfile',
-  (actionPayload, { dispatch, rejectWithValue, extra: sdk }) => {
-    const queryParams = {
-      expand: true,
-      include: ['profileImage'],
-      'fields.image': ['variants.square-small', 'variants.square-small2x'],
-    };
+  async (actionPayload, { dispatch, rejectWithValue, getState }) => {
+    const { user } = getState();
+    const currentUser = user?.currentUser;
 
-    return sdk.currentUser
-      .updateProfile(actionPayload, queryParams)
-      .then(response => {
-        const entities = denormalisedResponseEntities(response);
-        if (entities.length !== 1) {
-          throw new Error('Expected a resource in the sdk.currentUser.updateProfile response');
-        }
-        const currentUser = entities[0];
+    if (!currentUser?.id?.uuid) {
+      return rejectWithValue({ error: 'User not authenticated' });
+    }
 
-        // Update current user in state.user.currentUser through user.duck.js
-        dispatch(setCurrentUser(currentUser));
-        return response;
-      })
-      .catch(e => {
-        return rejectWithValue(storableError(e));
+    try {
+      const response = await updateUserProfile({
+        userId: currentUser.id.uuid,
+        username: actionPayload.username,
+        firstName: actionPayload.firstName,
+        lastName: actionPayload.lastName,
+        bio: actionPayload.bio,
+        phoneNumber: actionPayload.phoneNumber,
       });
+
+      if (response.success) {
+        await dispatch(fetchCurrentUser({ enforce: true }));
+        return response;
+      } else {
+        return rejectWithValue({ error: 'Profile update failed' });
+      }
+    } catch (e) {
+      return rejectWithValue(storableError(e));
+    }
   }
 );
 // Backward compatible wrapper for the updateProfile thunk

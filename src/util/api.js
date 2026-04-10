@@ -156,3 +156,7 @@ export const validateUsername = body => {
 export const deleteUserAccount = body => {
   return post('/api/delete-account', body);
 };
+
+export const updateUserProfile = body => {
+  return post('/api/profile/update', body);
+};

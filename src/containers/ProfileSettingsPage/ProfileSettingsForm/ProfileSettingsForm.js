@@ -28,47 +28,29 @@ import css from './ProfileSettingsForm.module.css';
 const ACCEPT_IMAGES = 'image/*';
 const UPLOAD_CHANGE_DELAY = 2000; // Show spinner so that browser has time to load img srcset
 
-const DisplayNameMaybe = props => {
-  const { userTypeConfig, intl } = props;
-
-  const isDisabled = userTypeConfig?.defaultUserFields?.displayName === false;
-  if (isDisabled) {
-    return null;
-  }
-
-  const { required } = userTypeConfig?.displayNameSettings || {};
-  const isRequired = required === true;
-
-  const validateMaybe = isRequired
-    ? {
-        validate: validators.required(
-          intl.formatMessage({
-            id: 'ProfileSettingsForm.displayNameRequired',
-          })
-        ),
-      }
-    : {};
+const UsernameMaybe = props => {
+  const { intl } = props;
 
   return (
     <div className={css.sectionContainer}>
       <H4 as="h2" className={css.sectionTitle}>
-        <FormattedMessage id="ProfileSettingsForm.displayNameHeading" />
+        <FormattedMessage id="ProfileSettingsForm.usernameHeading" />
       </H4>
       <FieldTextInput
         className={css.row}
         type="text"
-        id="displayName"
-        name="displayName"
+        id="username"
+        name="username"
         label={intl.formatMessage({
-          id: 'ProfileSettingsForm.displayNameLabel',
+          id: 'ProfileSettingsForm.usernameLabel',
         })}
         placeholder={intl.formatMessage({
-          id: 'ProfileSettingsForm.displayNamePlaceholder',
+          id: 'ProfileSettingsForm.usernamePlaceholder',
         })}
-        {...validateMaybe}
+        disabled={false}
       />
       <p className={css.extraInfo}>
-        <FormattedMessage id="ProfileSettingsForm.displayNameInfo" />
+        <FormattedMessage id="ProfileSettingsForm.usernameInfo" />
       </p>
     </div>
   );
@@ -370,9 +352,12 @@ class ProfileSettingsFormComponent extends Component {
                     validate={lastNameRequired}
                   />
                 </div>
+                <p className={css.extraInfo}>
+                  <FormattedMessage id="ProfileSettingsForm.namePrivacyInfo" />
+                </p>
               </div>
 
-              <DisplayNameMaybe userTypeConfig={userTypeConfig} intl={intl} />
+              <UsernameMaybe userTypeConfig={userTypeConfig} intl={intl} />
 
               <div className={classNames(css.sectionContainer)}>
                 <H4 as="h2" className={css.sectionTitle}>

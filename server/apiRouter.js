@@ -46,6 +46,8 @@ const deleteAccount = require('./api/delete-account');
 
 const createUserWithIdp = require('./api/auth/createUserWithIdp');
 const confirmOAuthSignup = require('./api/auth/confirmOAuthSignup');
+const validateUsername = require('./api/auth/validateUsername');
+const updateProfile = require('./api/profile/updateProfile');
 
 const { authenticateFacebook, authenticateFacebookCallback } = require('./api/auth/facebook');
 const { authenticateGoogle, authenticateGoogleCallback } = require('./api/auth/google');
@@ -117,6 +119,8 @@ router.get('/shopify/products/:productId', getProduct);
 // they want to continue with the data fetched from IdP (e.g. name and email)
 router.post('/auth/create-user-with-idp', createUserWithIdp); // OLD - Sharetribe SDK (deprecated)
 router.post('/auth/confirm-oauth-signup', confirmOAuthSignup); // NEW - Supabase OAuth
+router.post('/auth/validate-username', validateUsername);
+router.post('/profile/update', updateProfile);
 
 // Facebook authentication endpoints
 

@@ -73,13 +73,13 @@ const LoginFormComponent = props => (
         <Form className={classes} onSubmit={handleSubmit}>
           <div>
             <FieldTextInput
-              type="email"
+              type="text"
               id={formId ? `${formId}.email` : 'email'}
               name="email"
-              autoComplete="email"
-              label={emailLabel}
-              placeholder={emailPlaceholder}
-              validate={validators.composeValidators(emailRequired, emailValid)}
+              autoComplete="email username"
+              label="Username or Email"
+              placeholder="username or email"
+              validate={validators.required(emailRequiredMessage)}
             />
             <FieldTextInput
               className={css.password}

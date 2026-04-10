@@ -88,11 +88,7 @@ export const ProfileSettingsPageComponent = props => {
   const publicUserFields = userFields.filter(uf => uf.scope === 'public');
 
   const handleSubmit = (values, userType) => {
-    const { firstName, lastName, displayName, bio: rawBio, ...rest } = values;
-
-    const displayNameMaybe = displayName
-      ? { displayName: displayName.trim() }
-      : { displayName: null };
+    const { firstName, lastName, username, bio: rawBio, ...rest } = values;
 
     // Ensure that the optional bio is a string
     const bio = rawBio || '';
@@ -100,7 +96,7 @@ export const ProfileSettingsPageComponent = props => {
     const profile = {
       firstName: firstName.trim(),
       lastName: lastName.trim(),
-      ...displayNameMaybe,
+      username: username?.trim(),
       bio,
       publicData: {
         ...pickUserFieldsData(rest, 'public', userType, userFields),
@@ -118,7 +114,7 @@ export const ProfileSettingsPageComponent = props => {
   };
 
   const user = ensureCurrentUser(currentUser);
-  const { firstName, lastName, displayName, bio, publicData } = user?.attributes.profile;
+  const { firstName, lastName, username, bio, publicData } = user?.attributes.profile;
   // I.e. the status is active, not pending-approval or banned
   const isUnauthorizedUser = currentUser && !isUserAuthorized(currentUser);
 
@@ -126,9 +122,6 @@ export const ProfileSettingsPageComponent = props => {
   const profileImageId = user.profileImage ? user.profileImage.id : null;
   const profileImage = image || { imageId: profileImageId };
   const userTypeConfig = userTypes.find(config => config.userType === userType);
-  const isDisplayNameIncluded = userTypeConfig?.defaultUserFields?.displayName !== false;
-  // ProfileSettingsForm decides if it's allowed to show the input field.
-  const displayNameMaybe = isDisplayNameIncluded && displayName ? { displayName } : {};
 
   const profileSettingsForm = user.id ? (
     <ProfileSettingsForm
@@ -137,7 +130,7 @@ export const ProfileSettingsPageComponent = props => {
       initialValues={{
         firstName,
         lastName,
-        ...displayNameMaybe,
+        username,
         bio,
         profileImage: user.profileImage,
         ...initialValuesForUserFields(publicData, 'public', userType, userFields),
