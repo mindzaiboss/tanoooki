@@ -145,6 +145,11 @@ export const createUserWithIdp = body => {
   return post('/api/auth/confirm-oauth-signup', body);
 };
 
+// Check if username is available during signup.
+export const validateUsername = body => {
+  return post('/api/auth/validate-username', body);
+};
+
 // Check if user can be deleted and then delete the user. Endpoint logic
 // must be modified to accommodate the transaction processes used in
 // the marketplace.

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Form as FinalForm } from 'react-final-form';
 import arrayMutators from 'final-form-arrays';
 import classNames from 'classnames';
@@ -7,6 +7,7 @@ import { FormattedMessage, useIntl } from '../../../util/reactIntl';
 import { propTypes } from '../../../util/types';
 import * as validators from '../../../util/validators';
 import { getPropsForCustomUserFieldInputs } from '../../../util/userHelpers';
+import { validateUsername } from '../../../util/api';
 
 import { Form, PrimaryButton, FieldTextInput, CustomExtendedDataField } from '../../../components';
 
@@ -44,6 +45,39 @@ const ConfirmSignupFormComponent = props => (
 
       const { userType } = values || {};
 
+      // Username availability state
+      const [usernameValidation, setUsernameValidation] = useState({
+        checking: false,
+        available: null,
+        message: '',
+      });
+
+      const checkUsername = async username => {
+        if (!username || username.length < 3) {
+          setUsernameValidation({ checking: false, available: null, message: '' });
+          return;
+        }
+        setUsernameValidation({ checking: true, available: null, message: 'Checking...' });
+        try {
+          const response = await validateUsername({ username });
+          setUsernameValidation({
+            checking: false,
+            available: response.available,
+            message: response.message,
+          });
+        } catch (error) {
+          setUsernameValidation({ checking: false, available: false, message: 'Could not validate username' });
+        }
+      };
+
+      useEffect(() => {
+        const timeoutId = setTimeout(() => {
+          const username = values?.username;
+          if (username) checkUsername(username);
+        }, 500);
+        return () => clearTimeout(timeoutId);
+      }, [values?.username]);
+
       // email
       const emailRequired = validators.required(
         intl.formatMessage({
@@ -67,7 +101,8 @@ const ConfirmSignupFormComponent = props => (
 
       const classes = classNames(rootClassName || css.root, className);
       const submitInProgress = inProgress;
-      const submitDisabled = invalid || submitInProgress;
+      const submitDisabled = invalid || submitInProgress ||
+        (values?.username && !usernameValidation.available);
 
       // If authInfo is not available we should not show the ConfirmForm
       if (!authInfo) {
@@ -88,6 +123,31 @@ const ConfirmSignupFormComponent = props => (
 
           {showDefaultUserFields ? (
             <div className={css.defaultUserFields}>
+              {/* Username field — first and most important */}
+              <FieldTextInput
+                type="text"
+                id={formId ? `${formId}.username` : 'username'}
+                name="username"
+                autoComplete="username"
+                label="Username"
+                placeholder="Choose your username"
+                validate={validators.required('Username is required')}
+              />
+              {values?.username && usernameValidation.message && (
+                <div style={{
+                  marginTop: '-12px',
+                  marginBottom: '12px',
+                  fontSize: '14px',
+                  color: usernameValidation.available === true ? '#2ecc71' :
+                         usernameValidation.available === false ? '#e74c3c' : '#95a5a6',
+                }}>
+                  {usernameValidation.checking && '⏳ '}
+                  {usernameValidation.available === true && '✅ '}
+                  {usernameValidation.available === false && '❌ '}
+                  {usernameValidation.message}
+                </div>
+              )}
+
               <FieldTextInput
                 type="email"
                 id={formId ? `${formId}.email` : 'email'}

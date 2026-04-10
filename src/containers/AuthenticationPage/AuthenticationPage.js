@@ -327,14 +327,16 @@ const ConfirmIdProviderInfoForm = props => {
       firstName: newFirstName,
       lastName: newLastName,
       displayName,
+      username,
+      phoneNumber,
       ...rest
     } = values;
 
-    const displayNameMaybe = displayName ? { displayName: displayName.trim() } : {};
+    const resolvedDisplayName = displayName || [firstName, lastName].filter(Boolean).join(' ');
+    const displayNameMaybe = resolvedDisplayName ? { displayName: resolvedDisplayName.trim() } : {};
 
-    // Pass email, fistName or lastName to Marketplace API only if user has edited them
+    // Pass email, firstName or lastName to Marketplace API only if user has edited them
     // and they can't be fetched directly from idp provider (e.g. Facebook)
-
     const authParams = {
       ...(newEmail !== email && { email: newEmail }),
       ...(newFirstName !== firstName && { firstName: newFirstName }),
@@ -362,6 +364,8 @@ const ConfirmIdProviderInfoForm = props => {
     submitSingupWithIdp({
       idpToken,
       idpId,
+      username,
+      ...(phoneNumber ? { phoneNumber } : {}),
       ...authParams,
       ...displayNameMaybe,
       ...extendedDataMaybe,
