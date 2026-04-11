@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { compose } from 'redux';
 import { connect } from 'react-redux';
-import { useHistory } from 'react-router-dom';
+import { useHistory, useLocation } from 'react-router-dom';
 import { useIntl } from 'react-intl';
 
 // Import contexts and util modules
@@ -72,6 +72,14 @@ const EnhancedCheckoutPage = props => {
   const routeConfiguration = useRouteConfiguration();
   const intl = useIntl();
   const history = useHistory();
+  const location = useLocation();
+
+  // Guard: require delivery address before checkout
+  useEffect(() => {
+    if (props.currentUser?.id && !props.currentUser?.attributes?.profile?.delivery_address) {
+      history.push(`/onboarding?returnTo=${encodeURIComponent(location.pathname)}`);
+    }
+  }, [props.currentUser, history, location.pathname]);
 
   useEffect(() => {
     const {

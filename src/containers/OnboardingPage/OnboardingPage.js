@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { useHistory } from 'react-router-dom';
+import { useHistory, useLocation } from 'react-router-dom';
 import { connect } from 'react-redux';
 import { FormattedMessage } from '../../util/reactIntl';
 import { saveShippingAddress } from '../../util/api';
 import { fetchCurrentUser } from '../../ducks/user.duck';
-import { Page, LayoutSingleColumn, NamedLink } from '../../components';
+import { Page, LayoutSingleColumn } from '../../components';
 import TopbarContainer from '../TopbarContainer/TopbarContainer';
 import FooterContainer from '../FooterContainer/FooterContainer';
 import ShippingAddressForm from './ShippingAddressForm/ShippingAddressForm';
@@ -13,34 +13,37 @@ import css from './OnboardingPage.module.css';
 
 const OnboardingPageComponent = props => {
   const history = useHistory();
+  const location = useLocation();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   const { currentUser, onFetchCurrentUser } = props;
+
+  const params = new URLSearchParams(location.search);
+  const returnTo = params.get('returnTo');
 
   if (!currentUser || !currentUser.id) {
     history.push('/login');
     return null;
   }
 
-  const handleSubmit = async values => {
+  const handleSkip = () => {
+    sessionStorage.setItem('onboarding_skipped', 'true');
+    history.push(returnTo || '/');
+  };
+
+  const handleSubmit = async addressData => {
     setSaving(true);
     setError(null);
 
     try {
+      // addressData comes from ShippingAddressForm with deliveryAddress and shippingAddress
       await saveShippingAddress({
         userId: currentUser.id.uuid,
-        shippingAddress: {
-          street: values.street,
-          city: values.city,
-          state: values.state,
-          zip: values.zip,
-          country: values.country || 'US',
-        },
+        ...addressData,
       });
 
       // Set flag to prevent OnboardingGuard redirect
-      console.log('🏁 Setting onboarding_completed flag');
       sessionStorage.setItem('onboarding_completed', 'true');
 
       // Refresh currentUser
@@ -48,11 +51,11 @@ const OnboardingPageComponent = props => {
         await onFetchCurrentUser({ enforce: true });
       }
 
-      // Redirect to homepage
-      history.push('/');
+      // Redirect to return path or homepage
+      history.push(returnTo || '/');
     } catch (e) {
-      console.error('Failed to save shipping address:', e);
-      setError('Failed to save shipping address. Please try again.');
+      console.error('Failed to save addresses:', e);
+      setError('Failed to save addresses. Please try again.');
       setSaving(false);
     }
   };
@@ -76,9 +79,9 @@ const OnboardingPageComponent = props => {
           <ShippingAddressForm onSubmit={handleSubmit} inProgress={saving} />
 
           <div className={css.skipLink}>
-            <NamedLink name="LandingPage">
+            <button type="button" onClick={handleSkip} className={css.skipButton}>
               <FormattedMessage id="OnboardingPage.skipForNow" />
-            </NamedLink>
+            </button>
           </div>
         </div>
       </LayoutSingleColumn>

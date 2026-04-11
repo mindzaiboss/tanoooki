@@ -3,24 +3,24 @@ const { createClient } = require('@supabase/supabase-js');
 const log = require('../../log');
 
 /**
- * Save shipping address during onboarding
+ * Save delivery and shipping addresses during onboarding
  */
 module.exports = async (req, res) => {
-  const { userId, shippingAddress } = req.body;
+  const { userId, deliveryAddress, shippingAddress } = req.body;
 
   if (!userId) {
     return res.status(400).json({ error: 'userId is required' });
   }
 
-  if (
-    !shippingAddress ||
-    !shippingAddress.street ||
-    !shippingAddress.city ||
-    !shippingAddress.state ||
-    !shippingAddress.zip ||
-    !shippingAddress.country
-  ) {
-    return res.status(400).json({ error: 'Complete shipping address required' });
+  if (!deliveryAddress || !deliveryAddress.street || !deliveryAddress.city ||
+      !deliveryAddress.state || !deliveryAddress.zip || !deliveryAddress.country) {
+    return res.status(400).json({ error: 'Complete delivery address required' });
+  }
+
+  // Validate shipping address if provided
+  if (shippingAddress && (!shippingAddress.street || !shippingAddress.city ||
+      !shippingAddress.state || !shippingAddress.zip || !shippingAddress.country)) {
+    return res.status(400).json({ error: 'Incomplete shipping address provided' });
   }
 
   try {
@@ -29,19 +29,18 @@ module.exports = async (req, res) => {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    console.log('🔍 Saving shipping address:', { userId, shippingAddress });
-
     const { data, error } = await supabase
       .from('users')
-      .update({ shipping_address: shippingAddress })
+      .update({
+        delivery_address: deliveryAddress,
+        shipping_address: shippingAddress, // NULL if same as delivery
+      })
       .eq('id', userId)
       .select()
       .single();
 
-    console.log('✅ Supabase response:', { data, error });
-
     if (error) {
-      log.error(error, 'save-shipping-address-failed', { userId });
+      log.error(error, 'save-addresses-failed', { userId });
       return res.status(400).json({ error: error.message });
     }
 
@@ -50,9 +49,9 @@ module.exports = async (req, res) => {
       user: data,
     });
   } catch (e) {
-    log.error(e, 'save-shipping-address-exception', { userId });
+    log.error(e, 'save-addresses-exception', { userId });
     return res.status(500).json({
-      error: 'An unexpected error occurred while saving shipping address',
+      error: 'An unexpected error occurred while saving addresses',
     });
   }
 };

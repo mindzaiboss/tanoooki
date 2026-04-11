@@ -210,6 +210,13 @@ export const EditListingPageComponent = () => {
   const isDraftURI = type === LISTING_PAGE_PARAM_TYPE_DRAFT;
   const isNewListingFlow = isNewURI || isDraftURI;
 
+  // Guard: require delivery address before creating/editing listings
+  useEffect(() => {
+    if (currentUser?.id && !currentUser?.attributes?.profile?.delivery_address) {
+      history.push(`/onboarding?returnTo=${encodeURIComponent(location.pathname)}`);
+    }
+  }, [currentUser, history, location.pathname]);
+
   // Reset wizard state whenever a brand-new listing is started
   useEffect(() => {
     if (isNewURI) {

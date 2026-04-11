@@ -11,23 +11,19 @@ const OnboardingGuard = ({ children }) => {
   const isAuthenticated = useSelector(state => state.auth.isAuthenticated);
 
   useEffect(() => {
-    console.log('🛡️ OnboardingGuard check:', {
-      isAuthenticated,
-      hasCurrentUser: !!currentUser?.id,
-      hasShippingAddress: !!currentUser?.attributes?.profile?.shipping_address,
-      pathname: location.pathname,
-      flag: sessionStorage.getItem('onboarding_completed'),
-    });
-
     if (isAuthenticated && currentUser?.id) {
-      const hasShippingAddress = currentUser?.attributes?.profile?.shipping_address;
+      const hasShippingAddress = currentUser?.attributes?.profile?.delivery_address;
       const isExcluded = EXCLUDED_PATHS.some(p => location.pathname.startsWith(p));
 
-      // Check if user just completed onboarding - skip redirect this time
       const justCompletedOnboarding = sessionStorage.getItem('onboarding_completed') === 'true';
+      const hasSkipped = sessionStorage.getItem('onboarding_skipped') === 'true';
+
       if (justCompletedOnboarding) {
-        console.log('✅ Flag detected, clearing and skipping redirect');
         sessionStorage.removeItem('onboarding_completed');
+        return;
+      }
+
+      if (hasSkipped) {
         return;
       }
 
