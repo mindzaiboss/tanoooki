@@ -31,6 +31,7 @@ const formatSupabaseUser = supabaseUser => {
           return (supabaseUser.email || '')[0]?.toUpperCase() || '';
         })(),
         bio: profile.bio || null,
+        shipping_address: profile.shipping_address || supabaseUser.shipping_address || null,
         publicData: profile.publicData || {},
         privateData: profile.privateData || {},
         protectedData: profile.protectedData || {},

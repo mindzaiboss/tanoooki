@@ -48,6 +48,7 @@ const createUserWithIdp = require('./api/auth/createUserWithIdp');
 const confirmOAuthSignup = require('./api/auth/confirmOAuthSignup');
 const validateUsername = require('./api/auth/validateUsername');
 const updateProfile = require('./api/profile/updateProfile');
+const saveShippingAddress = require('./api/onboarding/saveShippingAddress');
 
 const { authenticateFacebook, authenticateFacebookCallback } = require('./api/auth/facebook');
 const { authenticateGoogle, authenticateGoogleCallback } = require('./api/auth/google');
@@ -121,6 +122,7 @@ router.post('/auth/create-user-with-idp', createUserWithIdp); // OLD - Sharetrib
 router.post('/auth/confirm-oauth-signup', confirmOAuthSignup); // NEW - Supabase OAuth
 router.post('/auth/validate-username', validateUsername);
 router.post('/profile/update', updateProfile);
+router.post('/onboarding/shipping-address', saveShippingAddress);
 
 // Facebook authentication endpoints
 

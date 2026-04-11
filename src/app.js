@@ -22,6 +22,7 @@ import { setTokens } from './util/authTokens';
 import { fetchCurrentUser } from './ducks/user.duck';
 
 import { MaintenanceMode } from './components';
+import OnboardingGuard from './components/OnboardingGuard/OnboardingGuard';
 
 // routing
 import routeConfiguration from './routing/routeConfiguration';
@@ -306,7 +307,9 @@ export const ClientApp = props => {
           <HelmetProvider>
             <IncludeScripts config={appConfig} initialPathname={window.location.pathname} />
             <BrowserRouter>
-              <Routes logLoadDataCalls={logLoadDataCalls} />
+              <OnboardingGuard>
+                <Routes logLoadDataCalls={logLoadDataCalls} />
+              </OnboardingGuard>
             </BrowserRouter>
           </HelmetProvider>
         </Provider>

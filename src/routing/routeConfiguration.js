@@ -42,6 +42,7 @@ const TransactionPage = loadable(() => import(/* webpackChunkName: "TransactionP
 const NoAccessPage = loadable(() => import(/* webpackChunkName: "NoAccessPage" */ '../containers/NoAccessPage/NoAccessPage'));
 const ListingCreatedPage = loadable(() => import(/* webpackChunkName: "ListingCreatedPage" */ '../containers/ListingCreatedPage/ListingCreatedPage'));
 const AdminPage = loadable(() => import(/* webpackChunkName: "AdminPage" */ '../containers/AdminPage/AdminPage'));
+const OnboardingPage = loadable(() => import(/* webpackChunkName: "OnboardingPage" */ '../containers/OnboardingPage/OnboardingPage'));
 
 // Styleguide helps you to review current components and develop new ones
 const StyleguidePage = loadable(() => import(/* webpackChunkName: "StyleguidePage" */ '../containers/StyleguidePage/StyleguidePage'));
@@ -361,6 +362,13 @@ const routeConfiguration = (layoutConfig, accessControlConfig) => {
       auth: true,
       authPage: 'LoginPage',
       component: AddressesPage,
+    },
+    {
+      path: '/onboarding',
+      name: 'OnboardingPage',
+      auth: true,
+      authPage: 'LoginPage',
+      component: OnboardingPage,
     },
     {
       path: '/account/manage',

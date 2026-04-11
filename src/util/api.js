@@ -160,3 +160,7 @@ export const deleteUserAccount = body => {
 export const updateUserProfile = body => {
   return post('/api/profile/update', body);
 };
+
+export const saveShippingAddress = body => {
+  return post('/api/onboarding/shipping-address', body);
+};

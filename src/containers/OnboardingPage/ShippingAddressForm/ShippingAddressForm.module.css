@@ -1,0 +1,27 @@
+.root {
+  /* Form styles */
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+.field {
+  margin-bottom: 20px;
+}
+
+.row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.fieldHalf {
+  flex: 1;
+}
+
+.submitButton {
+  margin-top: 32px;
+}
