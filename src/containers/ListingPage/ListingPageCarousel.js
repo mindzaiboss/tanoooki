@@ -133,10 +133,17 @@ export const ListingPageComponent = props => {
   } = props;
 
   const listingConfig = config.listing;
-  const listingId = new UUID(rawParams.id);
+  const decodedId = decodeURIComponent(rawParams.id);
+  const listingId = new UUID(decodedId);
   const isVariant = rawParams.variant != null;
   const isPendingApprovalVariant = rawParams.variant === LISTING_PAGE_PENDING_APPROVAL_VARIANT;
   const isDraftVariant = rawParams.variant === LISTING_PAGE_DRAFT_VARIANT;
+  console.log('=== CURRENT LISTING BRANCH ===');
+  console.log('isPendingApprovalVariant:', isPendingApprovalVariant);
+  console.log('isDraftVariant:', isDraftVariant);
+  console.log('showOwnListingsOnly:', showOwnListingsOnly);
+  console.log('Will call:', (isPendingApprovalVariant || isDraftVariant || showOwnListingsOnly) ? 'getOwnListing' : 'getListing');
+  console.log('==============================');
   const currentListing =
     isPendingApprovalVariant || isDraftVariant || showOwnListingsOnly
       ? ensureOwnListing(getOwnListing(listingId))
@@ -560,6 +567,10 @@ const EnhancedListingPage = props => {
 };
 
 const mapStateToProps = state => {
+  console.log('=== MAPSTATETOPROPS CALLED ===');
+  console.log('File: CAROUSEL');
+  console.log('state.marketplaceData.entities.listing:', state.marketplaceData?.entities?.listing);
+  console.log('==============================');
   const { isAuthenticated } = state.auth;
   const {
     showListingError,
@@ -579,10 +590,23 @@ const mapStateToProps = state => {
   const getListing = id => {
     const ref = { id, type: 'listing' };
     const listings = getMarketplaceEntities(state, [ref]);
+    console.log('=== GET LISTING LOOKUP ===');
+    console.log('Looking for id:', id);
+    console.log('id.uuid:', id?.uuid);
+    console.log('ref:', ref);
+    console.log('listings result:', listings);
+    console.log('listings.length:', listings.length);
+    console.log('Keys in entities.listing:', Object.keys(state.marketplaceData?.entities?.listing || {}));
+    console.log('==========================');
     return listings.length === 1 ? listings[0] : null;
   };
 
   const getOwnListing = id => {
+    console.log('=== GET OWN LISTING LOOKUP ===');
+    console.log('Looking for id:', id);
+    console.log('id.uuid:', id?.uuid);
+    console.log('Keys in ownListing:', Object.keys(state.marketplaceData?.entities?.ownListing || {}));
+    console.log('==============================');
     const ref = { id, type: 'ownListing' };
     const listings = getMarketplaceEntities(state, [ref]);
     return listings.length === 1 ? listings[0] : null;

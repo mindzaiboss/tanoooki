@@ -282,7 +282,7 @@ const publishListingPayloadCreator = ({ listingId }, { dispatch, getState, rejec
   const state = getState();
   const currentUser = state.user.currentUser;
   const vendorId = currentUser?.id?.uuid;
-  const vendorUsername = 'test_seller'; // TODO: Replace with actual username from user profile
+  const vendorUsername = getState().user.currentUser?.attributes?.profile?.username || 'anonymous';
 
   // Get the draft listing data from Redux state
   const listingDraft = state.EditListingPage.listingDraft;

@@ -160,19 +160,20 @@ export const EditListingPageComponent = () => {
   const marketplaceEntities = useSelector(state => state.marketplaceData.entities);
 
   const currentListing = useMemo(() => {
-    const listingId = submittedListingId || (routerParams.id ? new UUID(routerParams.id) : null);
+    // Shopify product IDs are GID strings — avoid converting with new UUID()
+    const listingIdString = submittedListingId?.uuid || routerParams.id;
+
+    if (!listingIdString) return ensureOwnListing(null);
 
     // For draft and edit listings, return from listingDraft in Redux
-    if (listingId && listingDraft &&
+    if (listingDraft &&
         (routerParams.type === LISTING_PAGE_PARAM_TYPE_DRAFT ||
          routerParams.type === LISTING_PAGE_PARAM_TYPE_EDIT)) {
       return ensureOwnListing(listingDraft);
     }
 
-    if (!listingId) return ensureOwnListing(null);
-
     const ownListings = marketplaceEntities?.ownListing || {};
-    const match = Object.values(ownListings).find(l => l?.id?.uuid === listingId.uuid);
+    const match = Object.values(ownListings).find(l => l?.id?.uuid === listingIdString);
     return ensureOwnListing(match || null);
   }, [submittedListingId, listingDraft, marketplaceEntities, routerParams.id, routerParams.type]);
 

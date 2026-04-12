@@ -1,7 +1,5 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { updatedEntities, denormalisedEntities } from '../../util/data';
 import { storableError } from '../../util/errors';
-import { createImageVariantConfig } from '../../util/sdkLoader';
 import { parse } from '../../util/urlHelpers';
 
 import { fetchCurrentUser } from '../../ducks/user.duck';
@@ -21,12 +19,13 @@ const RESULT_PAGE_SIZE = 42;
  */
 export const getOwnListingsById = (state, listingIds) => {
   const { ownEntities } = state.ManageListingsPage;
-  const resources = listingIds.map(id => ({
-    id,
-    type: 'ownListing',
-  }));
-  const throwIfNotFound = false;
-  return denormalisedEntities(ownEntities, resources, throwIfNotFound);
+
+  return listingIds
+    .map(id => {
+      const uuid = id.uuid || id;
+      return ownEntities[uuid];
+    })
+    .filter(Boolean);
 };
 
 // ================ Async Thunks ================ //
@@ -34,19 +33,31 @@ export const getOwnListingsById = (state, listingIds) => {
 ////////////////////////
 // Query Own Listings //
 ////////////////////////
-const queryOwnListingsPayloadCreator = (queryParams, { extra: sdk, dispatch, rejectWithValue }) => {
-  const { perPage, ...rest } = queryParams;
-  const params = { ...rest, perPage };
+const queryOwnListingsPayloadCreator = async (queryParams, { getState, rejectWithValue }) => {
+  const state = getState();
+  const { currentUser } = state.user;
 
-  return sdk.ownListings
-    .query(params)
-    .then(response => {
-      dispatch(addOwnEntities(response));
-      return response;
-    })
-    .catch(e => {
-      return rejectWithValue(storableError(e));
-    });
+  if (!currentUser?.attributes?.profile?.username) {
+    return rejectWithValue({ error: 'User must have a username to view listings' });
+  }
+
+  const username = currentUser.attributes.profile.username;
+  const userId = currentUser.id.uuid;
+
+  try {
+    const response = await fetch(
+      `/api/shopify/user-listings?username=${encodeURIComponent(username)}&userId=${encodeURIComponent(userId)}`,
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch listings: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (e) {
+    return rejectWithValue(storableError(e));
+  }
 };
 
 export const queryOwnListingsThunk = createAsyncThunk(
@@ -137,8 +148,6 @@ export const discardDraft = listingId => (dispatch, getState, sdk) => {
 
 // ================ Slice ================ //
 
-const resultIds = data => data.data.map(l => l.id);
-
 const updateListingAttributes = (state, listingEntity) => {
   const oldListing = state.ownEntities.ownListing[listingEntity.id.uuid];
   const updatedListing = { ...oldListing, attributes: listingEntity.attributes };
@@ -191,9 +200,23 @@ const manageListingsPageSlice = createSlice({
         state.currentPageResultIds = [];
       })
       .addCase(queryOwnListingsThunk.fulfilled, (state, action) => {
-        state.currentPageResultIds = resultIds(action.payload.data);
-        state.pagination = action.payload.data.meta;
+        const { data, meta } = action.payload;
+
+        // Store listings indexed by UUID (extracted from Shopify GID)
+        const ownEntities = {};
+        data.forEach(listing => {
+          const uuid = listing.id.uuid.split('/').pop();
+          ownEntities[uuid] = listing;
+        });
+
+        state.ownEntities = ownEntities;
+        state.currentPageResultIds = data.map(listing => ({
+          uuid: listing.id.uuid.split('/').pop(),
+          type: 'listing',
+        }));
         state.queryInProgress = false;
+        state.queryListingsError = null;
+        state.pagination = meta;
       })
       .addCase(queryOwnListingsThunk.rejected, (state, action) => {
         // eslint-disable-next-line no-console
@@ -279,32 +302,12 @@ export const loadData = (params, search, config) => (dispatch, getState, sdk) =>
   const page = queryParams.page || 1;
   dispatch(clearOpenListingError());
 
-  const {
-    aspectWidth = 1,
-    aspectHeight = 1,
-    variantPrefix = 'listing-card',
-  } = config.layout.listingImage;
-  const aspectRatio = aspectHeight / aspectWidth;
-
   return Promise.all([
     dispatch(fetchCurrentUser()),
-    dispatch(
-      queryOwnListings({
-        ...queryParams,
-        page,
-        perPage: RESULT_PAGE_SIZE,
-        include: ['images', 'currentStock'],
-        'fields.image': [`variants.${variantPrefix}`, `variants.${variantPrefix}-2x`],
-        ...createImageVariantConfig(`${variantPrefix}`, 400, aspectRatio),
-        ...createImageVariantConfig(`${variantPrefix}-2x`, 800, aspectRatio),
-        'limit.images': 1,
-      })
-    ),
+    dispatch(queryOwnListings({ page, perPage: RESULT_PAGE_SIZE })),
   ])
     .then(response => {
-      // const currentUser = response[0]?.data?.data;
-      const ownListings = response[1]?.data?.data;
-      return ownListings;
+      return response[1]?.data || [];
     })
     .catch(e => {
       throw e;

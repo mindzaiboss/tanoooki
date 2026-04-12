@@ -32,6 +32,7 @@ const createProduct = require('./api/shopify/create-product');
 const updateProduct = require('./api/shopify/update-product');
 const publishProduct = require('./api/shopify/publish-product');
 const getProduct = require('./api/shopify/get-product');
+const getUserListings = require('./api/shopify/getUserListings');
 
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -114,6 +115,7 @@ router.post('/shopify/create-product', createProduct);
 router.post('/shopify/update-product', updateProduct);
 router.post('/shopify/publish-product', publishProduct);
 router.get('/shopify/products/:productId', getProduct);
+router.get('/shopify/user-listings', getUserListings);
 
 // Create user with identity provider (e.g. Facebook or Google)
 // This endpoint is called to create a new user after user has confirmed

@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing productId' });
     }
 
-    const gid = `gid://shopify/Product/${productId}`;
+    const gid = productId.startsWith('gid://') ? productId : `gid://shopify/Product/${productId}`;
 
     const query = `
       query getProduct($id: ID!) {
@@ -35,6 +35,7 @@ module.exports = async (req, res) => {
           handle
           status
           vendor
+          createdAt
           featuredImage { url altText }
           images(first: 10) {
             edges {
@@ -117,13 +118,10 @@ module.exports = async (req, res) => {
       : '';
     const includes_card = mf.includes_card === 'true';
 
-    // Images mapped to Sharetribe-compatible shape
     const images = (product.images?.edges || []).map(edge => {
       const url = edge.node.url;
-      const imgGid = edge.node.id;
-      const numericId = imgGid.split('/').pop();
       return {
-        id: { uuid: numericId },
+        id: { uuid: edge.node.id },
         type: 'image',
         attributes: {
           variants: {
@@ -135,43 +133,43 @@ module.exports = async (req, res) => {
     });
 
     return res.status(200).json({
-      success: true,
-      data: {
-        id: productId,
-        title: product.title,
-        description: product.descriptionHtml,
-        handle: product.handle,
-        status: product.status,
-        vendor: product.vendor,
-        price: priceInCents,
-        stock: stockQuantity,
-        sku: variant?.sku,
-        barcode: variant?.barcode,
-        variantId: variant?.id || null,
+      listing: {
+        id: { uuid: product.id },
+        type: 'listing',
+        attributes: {
+          title: product.title,
+          description: product.descriptionHtml || '',
+          state: product.status === 'ACTIVE' ? 'published' : 'draft',
+          createdAt: product.createdAt || null,
+          price: priceInCents != null
+            ? { amount: priceInCents, currency: 'USD' }
+            : { amount: 0, currency: 'USD' },
+          publicData: {
+            listingType: 'product-selling',
+            transactionProcessAlias: 'default-buying-money-in-use/release-1',
+            unitType: 'item',
+            categoryLevel1: product.productType || '',
+            brand,
+            artist: mf.artist || '',
+            series_collection: mf.series_collection || '',
+            edition_size_exclusivity: mf.edition_size_exclusivity || '',
+            itemcondition,
+            condition_notes: mf.condition_notes || '',
+            original_packaging_included,
+            includes_card,
+            barcode_UPC: variant?.barcode || variant?.sku || '',
+            shippingEnabled: true,
+            packageWeight,
+            pub_packageWeight: packageWeight,
+            packageWeightUnit,
+            pub_packageWeightUnit: packageWeightUnit,
+            variantId: variant?.id || null,
+            sku: variant?.sku || '',
+          },
+        },
         images,
-        imageUrl: product.featuredImage?.url || null,
-        publicData: {
-          // UI-only fields — hardcoded defaults so wizard doesn't break
-          listingType: 'product-selling',
-          transactionProcessAlias: 'default-buying-money-in-use/release-1',
-          unitType: 'item',
-          categoryLevel1: product.productType || '',
-          // Product details
-          brand,
-          artist: mf.artist || '',
-          series_collection: mf.series_collection || '',
-          edition_size_exclusivity: mf.edition_size_exclusivity || '',
-          itemcondition,
-          condition_notes: mf.condition_notes || '',
-          original_packaging_included,
-          includes_card,
-          barcode_UPC: variant?.barcode || variant?.sku || '',
-          // Shipping — weight from variant, both prefixed and unprefixed for form compat
-          shippingEnabled: true,
-          packageWeight,
-          pub_packageWeight: packageWeight,
-          packageWeightUnit,
-          pub_packageWeightUnit: packageWeightUnit,
+        currentStock: {
+          attributes: { quantity: stockQuantity ?? 0 },
         },
       },
     });

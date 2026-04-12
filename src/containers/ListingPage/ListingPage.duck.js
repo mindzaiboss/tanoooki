@@ -1,11 +1,10 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-import { types as sdkTypes, createImageVariantConfig } from '../../util/sdkLoader';
+import { types as sdkTypes } from '../../util/sdkLoader';
 import { storableError } from '../../util/errors';
 import { addMarketplaceEntities } from '../../ducks/marketplaceData.duck';
 import { transactionLineItems } from '../../util/api';
 import * as log from '../../util/log';
-import { denormalisedResponseEntities } from '../../util/data';
 import {
   bookingTimeUnits,
   findNextBoundary,
@@ -13,24 +12,21 @@ import {
   monthIdString,
   stringifyDateToISO8601,
 } from '../../util/dates';
-import {
-  hasPermissionToInitiateTransactions,
-  hasPermissionToViewData,
-  isUserAuthorized,
-} from '../../util/userHelpers';
-import {
-  LISTING_PAGE_DRAFT_VARIANT,
-  LISTING_PAGE_PENDING_APPROVAL_VARIANT,
-} from '../../util/urlHelpers';
+
 import {
   getProcess,
   isBookingProcessAlias,
   isNegotiationProcessAlias,
   OFFER,
 } from '../../transactions/transaction';
+import { denormalisedResponseEntities } from '../../util/data';
+import {
+  hasPermissionToInitiateTransactions,
+  isUserAuthorized,
+} from '../../util/userHelpers';
 import { fetchCurrentUser, setCurrentUserHasOrders } from '../../ducks/user.duck';
 
-const { UUID } = sdkTypes;
+const { UUID, Money } = sdkTypes;
 const MINUTE_IN_MS = 1000 * 60;
 
 // Day-based time slots queries are cached for 1 minute.
@@ -49,64 +45,58 @@ const removeOutdatedDateData = timeSlotsForDate => {
 //////////////////
 // Show Listing //
 //////////////////
-const showListingPayloadCreator = ({ listingId, config, isOwn = false }, thunkAPI) => {
-  const { dispatch, rejectWithValue, extra: sdk } = thunkAPI;
-  const {
-    aspectWidth = 1,
-    aspectHeight = 1,
-    variantPrefix = 'listing-card',
-  } = config.layout.listingImage;
-  const aspectRatio = aspectHeight / aspectWidth;
+const showListingPayloadCreator = async ({ listingId, config, isOwn = false }, thunkAPI) => {
+  const { dispatch, rejectWithValue } = thunkAPI;
 
-  // Current user entity is fetched in a bit lazy fashion, since it's not tied to returned Promise chain.
-  const fetchCurrentUserOptions = {
-    updateHasListings: false,
-    updateNotifications: false,
-  };
-  dispatch(fetchCurrentUser(fetchCurrentUserOptions));
+  dispatch(fetchCurrentUser({ updateHasListings: false, updateNotifications: false }));
 
-  const params = {
-    id: listingId,
-    include: ['author', 'author.profileImage', 'images', 'currentStock'],
-    'fields.image': [
-      // Scaled variants for large images
-      'variants.scaled-small',
-      'variants.scaled-medium',
-      'variants.scaled-large',
-      'variants.scaled-xlarge',
+  try {
+    const productId = decodeURIComponent(listingId.uuid);
+    const response = await fetch(`/api/shopify/products/${encodeURIComponent(productId)}`);
 
-      // Cropped variants for listing thumbnail images
-      `variants.${variantPrefix}`,
-      `variants.${variantPrefix}-2x`,
-      `variants.${variantPrefix}-4x`,
-      `variants.${variantPrefix}-6x`,
+    if (!response.ok) {
+      return rejectWithValue({ status: response.status });
+    }
 
-      // Social media
-      'variants.facebook',
-      'variants.twitter',
+    const json = await response.json();
+    if (!json.listing) {
+      return rejectWithValue({ status: 404 });
+    }
 
-      // Avatars
-      'variants.square-small',
-      'variants.square-small2x',
-    ],
-    ...createImageVariantConfig(`${variantPrefix}`, 400, aspectRatio),
-    ...createImageVariantConfig(`${variantPrefix}-2x`, 800, aspectRatio),
-    ...createImageVariantConfig(`${variantPrefix}-4x`, 1600, aspectRatio),
-    ...createImageVariantConfig(`${variantPrefix}-6x`, 2400, aspectRatio),
-  };
+    const { listing: rawListing } = json;
 
-  const show = isOwn ? sdk.ownListings.show(params) : sdk.listings.show(params);
+    // Convert plain price object to Money instance
+    const rawPrice = rawListing.attributes?.price;
+    const price = rawPrice ? new Money(rawPrice.amount, rawPrice.currency) : null;
 
-  return show
-    .then(data => {
-      const listingFields = config?.listing?.listingFields;
-      const sanitizeConfig = { listingFields };
-      dispatch(addMarketplaceEntities(data, sanitizeConfig));
-      return data;
-    })
-    .catch(e => {
-      return rejectWithValue(storableError(e));
-    });
+    const listing = {
+      ...rawListing,
+      // Override id with the UUID object loadData passed in (ensures consistent lookup key)
+      id: listingId,
+      attributes: {
+        ...rawListing.attributes,
+        price,
+      },
+    };
+
+    // Store under both types so getListing (entities.listing) and
+    // getOwnListing (entities.ownListing) both find it regardless of auth state.
+    const listingAsListing = { ...listing, type: 'listing' };
+    const listingAsOwnListing = { ...listing, type: 'ownListing' };
+
+    // Images are embedded directly on each entity (not via relationships) so
+    // denormalisedEntities skips the recursive throwIfNotFound lookup.
+    const sdkResponse = { data: { data: [listingAsListing, listingAsOwnListing], included: [] } };
+    dispatch(addMarketplaceEntities(sdkResponse, {}));
+    console.log('=== STORED LISTING DEBUG ===');
+    console.log('listingId:', listingId);
+    console.log('listing.id:', listing.id);
+    console.log('sdkResponse:', JSON.stringify(sdkResponse, null, 2));
+    console.log('============================');
+    return sdkResponse;
+  } catch (e) {
+    return rejectWithValue(storableError(e));
+  }
 };
 
 export const showListingThunk = createAsyncThunk(
@@ -123,24 +113,10 @@ export const showListing = (listingId, config, isOwn = false) => (dispatch, getS
 ///////////////////
 export const fetchReviewsThunk = createAsyncThunk(
   'ListingPage/fetchReviews',
-  ({ listingId }, { rejectWithValue, extra: sdk }) => {
-    return sdk.reviews
-      .query({
-        listing_id: listingId,
-        state: 'public',
-        include: ['author', 'author.profileImage'],
-        'fields.image': ['variants.square-small', 'variants.square-small2x'],
-      })
-      .then(response => {
-        return denormalisedResponseEntities(response);
-      })
-      .catch(e => {
-        return rejectWithValue(storableError(e));
-      });
-  }
+  () => Promise.resolve([])
 );
 
-export const fetchReviews = listingId => (dispatch, getState, sdk) => {
+export const fetchReviews = listingId => dispatch => {
   return dispatch(fetchReviewsThunk({ listingId })).unwrap();
 };
 
@@ -161,14 +137,8 @@ const fetchTimeSlotsPayloadCreator = ({ listingId, start, end, timeZone, options
   const { dispatch, getState } = thunkAPI;
   const { extraQueryParams = null, useFetchTimeSlotsForDate = false } = options || {};
 
-  // The maximum pagination page size for timeSlots is 500
-  const extraParams = extraQueryParams || {
-    perPage: 500,
-    page: 1,
-  };
+  const extraParams = extraQueryParams || { perPage: 500, page: 1 };
 
-  // For small time units, we fetch the data per date.
-  // This is to avoid fetching too much data (with 15 minute intervals, there can be 24*4*31 = 2928 time slots)
   if (useFetchTimeSlotsForDate) {
     const dateId = stringifyDateToISO8601(start, timeZone);
     const dateData = getState().ListingPage.timeSlotsForDate[dateId];
@@ -177,22 +147,13 @@ const fetchTimeSlotsPayloadCreator = ({ listingId, start, end, timeZone, options
     if (hasRecentlyFetchedData) {
       return Promise.resolve(dateData?.timeSlots || []);
     }
-
     return dispatch(timeSlotsRequest({ listingId, start, end, ...extraParams }))
-      .then(response => {
-        return response.payload;
-      })
-      .catch(e => {
-        return [];
-      });
+      .then(response => response.payload)
+      .catch(() => []);
   } else {
     return dispatch(timeSlotsRequest({ listingId, start, end, ...extraParams }))
-      .then(response => {
-        return response.payload;
-      })
-      .catch(e => {
-        return [];
-      });
+      .then(response => response.payload)
+      .catch(() => []);
   }
 };
 
@@ -219,30 +180,23 @@ const sendInquiryPayloadCreator = (
   const processAlias = listing?.attributes?.publicData?.transactionProcessAlias;
   if (!processAlias) {
     const error = new Error('No transaction process attached to listing');
-    log.error(error, 'listing-process-missing', {
-      listingId: listing?.id?.uuid,
-    });
+    log.error(error, 'listing-process-missing', { listingId: listing?.id?.uuid });
     return rejectWithValue(storableError(error));
   }
 
   const listingId = listing?.id;
-  const [processName, alias] = processAlias.split('/');
-
-  // Negotiation process does not support inquiry for customer role on OFFER flog (only request for quote is supported)
+  const [processName] = processAlias.split('/');
   const isNegotiationProcess = isNegotiationProcessAlias(processAlias);
   const unitType = listing?.attributes?.publicData?.unitType || '';
   if (isNegotiationProcess && unitType === OFFER) {
     return rejectWithValue(
       storableError(
-        new Error(
-          'Negotiation process with unit type OFFER does not support inquiry for customer role'
-        )
+        new Error('Negotiation process with unit type OFFER does not support inquiry for customer role')
       )
     );
   }
 
   const transitions = getProcess(processName)?.transitions;
-
   const bodyParams = {
     transition: transitions.INQUIRE,
     processAlias,
@@ -252,16 +206,12 @@ const sendInquiryPayloadCreator = (
     .initiate(bodyParams)
     .then(response => {
       const transactionId = response.data.data.id;
-
-      // Send the message to the created transaction
       return sdk.messages.send({ transactionId, content: message }).then(() => {
         dispatch(setCurrentUserHasOrders());
         return transactionId;
       });
     })
-    .catch(e => {
-      return rejectWithValue(storableError(e));
-    });
+    .catch(e => rejectWithValue(storableError(e)));
 };
 
 export const sendInquiryThunk = createAsyncThunk(
@@ -274,13 +224,11 @@ export const sendInquiry = (listing, message) => (dispatch, getState, sdk) => {
 };
 
 // Helper function for loadData call.
-// Note: listing could be ownListing entity too
 const fetchMonthlyTimeSlots = (dispatch, listing) => {
   const hasWindow = typeof window !== 'undefined';
   const { availabilityPlan, publicData } = listing?.attributes || {};
   const tz = availabilityPlan?.timezone;
 
-  // Fetch time-zones on client side only.
   if (hasWindow && listing.id && !!tz) {
     const { unitType, priceVariants, startTimeInterval } = publicData || {};
     const now = new Date();
@@ -293,7 +241,6 @@ const fetchMonthlyTimeSlots = (dispatch, listing) => {
       ? 'hour'
       : 'day';
     const nextBoundary = findNextBoundary(now, 1, timeUnit, tz);
-
     const nextMonth = getStartOf(nextBoundary, 'month', tz, 1, 'months');
     const nextAfterNextMonth = getStartOf(nextMonth, 'month', tz, 1, 'months');
 
@@ -310,7 +257,6 @@ const fetchMonthlyTimeSlots = (dispatch, listing) => {
       : nextAfterNextMonth;
 
     const minDurationStartingInInterval = isFixed ? bookingLengthInMinutes : 60;
-
     const options = intervalAlign => {
       return ['fixed', 'hour'].includes(unitType)
         ? {
@@ -332,7 +278,6 @@ const fetchMonthlyTimeSlots = (dispatch, listing) => {
     ]);
   }
 
-  // By default return an empty array
   return Promise.all([]);
 };
 
@@ -344,9 +289,7 @@ const fetchTransactionLineItemsPayloadCreator = (
   { rejectWithValue }
 ) => {
   return transactionLineItems({ orderData, listingId, isOwnListing })
-    .then(response => {
-      return response.data;
-    })
+    .then(response => response.data)
     .catch(e => {
       log.error(e, 'fetching-line-items-failed', {
         listingId: listingId.uuid,
@@ -373,23 +316,8 @@ const initialState = {
   showListingError: null,
   reviews: [],
   fetchReviewsError: null,
-  monthlyTimeSlots: {
-    // '2022-03': {
-    //   timeSlots: [],
-    //   fetchTimeSlotsError: null,
-    //   fetchTimeSlotsInProgress: null,
-    // },
-  },
-  timeSlotsForDate: {
-    // For small time units, we fetch monthly time slots with sparse mode for calendar view
-    // and when the user clicks on a day, we make a full time slot query. This is for that purpose.
-    // '2025-02-03': {
-    //   timeSlots: [],
-    //   fetchedAt: 1738569600000,
-    //   fetchTimeSlotsError: null,
-    //   fetchTimeSlotsInProgress: null,
-    // },
-  },
+  monthlyTimeSlots: {},
+  timeSlotsForDate: {},
   lineItems: null,
   fetchLineItemsInProgress: false,
   fetchLineItemsError: null,
@@ -412,8 +340,8 @@ const listingPageSlice = createSlice({
         state.id = action.meta.arg.listingId;
         state.showListingError = null;
       })
-      .addCase(showListingThunk.fulfilled, (state, action) => {
-        // Data is handled by addMarketplaceEntities in the thunk
+      .addCase(showListingThunk.fulfilled, state => {
+        // Data stored via addMarketplaceEntities in the thunk
       })
       .addCase(showListingThunk.rejected, (state, action) => {
         state.showListingError = action.payload;
@@ -430,22 +358,17 @@ const listingPageSlice = createSlice({
       .addCase(fetchTimeSlotsThunk.pending, (state, action) => {
         const { options, start, timeZone } = action.meta.arg;
         const { useFetchTimeSlotsForDate = false } = options || {};
-
         if (useFetchTimeSlotsForDate) {
           const dateId = stringifyDateToISO8601(start, timeZone);
           state.timeSlotsForDate = removeOutdatedDateData(state.timeSlotsForDate);
-          if (!state.timeSlotsForDate[dateId]) {
-            state.timeSlotsForDate[dateId] = {};
-          }
+          if (!state.timeSlotsForDate[dateId]) state.timeSlotsForDate[dateId] = {};
           state.timeSlotsForDate[dateId].fetchTimeSlotsError = null;
           state.timeSlotsForDate[dateId].fetchedAt = null;
           state.timeSlotsForDate[dateId].fetchTimeSlotsInProgress = true;
           state.timeSlotsForDate[dateId].timeSlots = [];
         } else {
           const monthId = monthIdString(start, timeZone);
-          if (!state.monthlyTimeSlots[monthId]) {
-            state.monthlyTimeSlots[monthId] = {};
-          }
+          if (!state.monthlyTimeSlots[monthId]) state.monthlyTimeSlots[monthId] = {};
           state.monthlyTimeSlots[monthId].fetchTimeSlotsError = null;
           state.monthlyTimeSlots[monthId].fetchTimeSlotsInProgress = true;
         }
@@ -453,20 +376,15 @@ const listingPageSlice = createSlice({
       .addCase(fetchTimeSlotsThunk.fulfilled, (state, action) => {
         const { options, start, timeZone } = action.meta.arg;
         const { useFetchTimeSlotsForDate = false } = options || {};
-
         if (useFetchTimeSlotsForDate) {
           const dateId = stringifyDateToISO8601(start, timeZone);
-          if (!state.timeSlotsForDate[dateId]) {
-            state.timeSlotsForDate[dateId] = {};
-          }
+          if (!state.timeSlotsForDate[dateId]) state.timeSlotsForDate[dateId] = {};
           state.timeSlotsForDate[dateId].fetchTimeSlotsInProgress = false;
           state.timeSlotsForDate[dateId].fetchedAt = new Date().getTime();
           state.timeSlotsForDate[dateId].timeSlots = action.payload;
         } else {
           const monthId = monthIdString(start, timeZone);
-          if (!state.monthlyTimeSlots[monthId]) {
-            state.monthlyTimeSlots[monthId] = {};
-          }
+          if (!state.monthlyTimeSlots[monthId]) state.monthlyTimeSlots[monthId] = {};
           state.monthlyTimeSlots[monthId].fetchTimeSlotsInProgress = false;
           state.monthlyTimeSlots[monthId].timeSlots = action.payload;
         }
@@ -474,19 +392,14 @@ const listingPageSlice = createSlice({
       .addCase(fetchTimeSlotsThunk.rejected, (state, action) => {
         const { options, start, timeZone } = action.meta.arg;
         const { useFetchTimeSlotsForDate = false } = options || {};
-
         if (useFetchTimeSlotsForDate) {
           const dateId = stringifyDateToISO8601(start, timeZone);
-          if (!state.timeSlotsForDate[dateId]) {
-            state.timeSlotsForDate[dateId] = {};
-          }
+          if (!state.timeSlotsForDate[dateId]) state.timeSlotsForDate[dateId] = {};
           state.timeSlotsForDate[dateId].fetchTimeSlotsInProgress = false;
           state.timeSlotsForDate[dateId].fetchTimeSlotsError = action.payload;
         } else {
           const monthId = monthIdString(start, timeZone);
-          if (!state.monthlyTimeSlots[monthId]) {
-            state.monthlyTimeSlots[monthId] = {};
-          }
+          if (!state.monthlyTimeSlots[monthId]) state.monthlyTimeSlots[monthId] = {};
           state.monthlyTimeSlots[monthId].fetchTimeSlotsInProgress = false;
           state.monthlyTimeSlots[monthId].fetchTimeSlotsError = action.payload;
         }
@@ -525,7 +438,8 @@ export default listingPageSlice.reducer;
 // ================ Load data ================ //
 
 export const loadData = (params, search, config) => (dispatch, getState, sdk) => {
-  const listingId = new UUID(params.id);
+  const decodedId = decodeURIComponent(params.id);
+  const listingId = new UUID(decodedId);
   const state = getState();
   const currentUser = state.user?.currentUser;
   const inquiryModalOpenForListingId =
@@ -533,37 +447,16 @@ export const loadData = (params, search, config) => (dispatch, getState, sdk) =>
       ? state.ListingPage.inquiryModalOpenForListingId
       : null;
 
-  // Clear old line-items
   dispatch(setInitialValues({ lineItems: null, inquiryModalOpenForListingId }));
 
-  const ownListingVariants = [LISTING_PAGE_DRAFT_VARIANT, LISTING_PAGE_PENDING_APPROVAL_VARIANT];
-  if (ownListingVariants.includes(params.variant)) {
-    return dispatch(showListing(listingId, config, true));
-  }
-
-  // In private marketplace mode, this page won't fetch data if the user is unauthorized
-  const isAuthorized = currentUser && isUserAuthorized(currentUser);
-  const isPrivateMarketplace = config.accessControl.marketplace.private === true;
-  const canFetchData = !isPrivateMarketplace || (isPrivateMarketplace && isAuthorized);
-  if (!canFetchData) {
-    return Promise.resolve();
-  }
-
-  const hasNoViewingRights = currentUser && !hasPermissionToViewData(currentUser);
-  const promises = hasNoViewingRights
-    ? // If user has no viewing rights, only allow fetching their own listing without reviews
-      [dispatch(showListing(listingId, config, true))]
-    : // For users with viewing rights, fetch the listing and the associated reviews
-      [dispatch(showListing(listingId, config)), dispatch(fetchReviews(listingId))];
-
-  return Promise.all(promises).then(response => {
+  return Promise.all([
+    dispatch(showListing(listingId, config)),
+    dispatch(fetchReviews(listingId)),
+  ]).then(response => {
     const listingResponse = response[0];
     const listing = listingResponse?.data?.data;
     const transactionProcessAlias = listing?.attributes?.publicData?.transactionProcessAlias || '';
-    if (isBookingProcessAlias(transactionProcessAlias) && !hasNoViewingRights) {
-      // Fetch timeSlots if the user has viewing rights.
-      // This can happen parallel to loadData.
-      // We are not interested to return them from loadData call.
+    if (isBookingProcessAlias(transactionProcessAlias)) {
       fetchMonthlyTimeSlots(dispatch, listing);
     }
     return response;

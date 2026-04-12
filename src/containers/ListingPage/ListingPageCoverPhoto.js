@@ -135,7 +135,8 @@ export const ListingPageComponent = props => {
   } = props;
 
   const listingConfig = config.listing;
-  const listingId = new UUID(rawParams.id);
+  const decodedId = decodeURIComponent(rawParams.id);
+  const listingId = new UUID(decodedId);
   const isVariant = rawParams.variant != null;
   const isPendingApprovalVariant = rawParams.variant === LISTING_PAGE_PENDING_APPROVAL_VARIANT;
   const isDraftVariant = rawParams.variant === LISTING_PAGE_DRAFT_VARIANT;
@@ -143,6 +144,13 @@ export const ListingPageComponent = props => {
     isPendingApprovalVariant || isDraftVariant || showOwnListingsOnly
       ? ensureOwnListing(getOwnListing(listingId))
       : ensureListing(getListing(listingId));
+  console.log('=== COMPONENT LOOKUP DEBUG ===');
+  console.log('listingId:', listingId);
+  console.log('listingId.uuid:', listingId?.uuid);
+  console.log('getListing result:', getListing(listingId));
+  console.log('currentListing:', currentListing);
+  console.log('currentListing.id:', currentListing?.id);
+  console.log('==============================');
 
   const listingSlug = rawParams.slug || createSlug(currentListing.attributes.title || '');
   const params = { slug: listingSlug, ...rawParams };
@@ -587,6 +595,10 @@ const EnhancedListingPage = props => {
 };
 
 const mapStateToProps = state => {
+  console.log('=== MAPSTATETOPROPS CALLED ===');
+  console.log('File: COVERPHOTO');
+  console.log('state.marketplaceData.entities.listing:', state.marketplaceData?.entities?.listing);
+  console.log('==============================');
   const { isAuthenticated } = state.auth;
   const {
     showListingError,
@@ -606,6 +618,12 @@ const mapStateToProps = state => {
   const getListing = id => {
     const ref = { id, type: 'listing' };
     const listings = getMarketplaceEntities(state, [ref]);
+    console.log('=== GET LISTING DEBUG ===');
+    console.log('Looking for id:', id);
+    console.log('id.uuid:', id?.uuid);
+    console.log('Found listings:', listings);
+    console.log('marketplaceData.entities.listing:', state.marketplaceData?.entities?.listing);
+    console.log('=========================');
     return listings.length === 1 ? listings[0] : null;
   };
 

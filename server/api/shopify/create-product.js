@@ -104,6 +104,7 @@ module.exports = async (req, res) => {
   try {
     const {
       vendorUsername,
+      vendorId,
       title,
       description,
       price,
@@ -146,6 +147,8 @@ module.exports = async (req, res) => {
       { namespace: 'custom', key: 'includes_original_packaging', value: includesOriginalPackaging ? 'Yes' : 'No', type: 'single_line_text_field' },
       { namespace: 'custom', key: 'includes_card', value: includesCard ? 'Yes' : 'No', type: 'single_line_text_field' },
       { namespace: 'custom', key: 'fulfillment_method', value: 'Fulfilled by Seller', type: 'single_line_text_field' },
+      vendorId ? { namespace: 'custom', key: 'vendor_id', value: vendorId, type: 'single_line_text_field' } : null,
+      vendorUsername ? { namespace: 'custom', key: 'vendor_username', value: vendorUsername, type: 'single_line_text_field' } : null,
     ].filter(m => m && m.value);
 
     // Prepare images
@@ -182,7 +185,7 @@ module.exports = async (req, res) => {
       input: {
         title,
         descriptionHtml: description || '',
-        vendor: vendorUsername || 'Tanoooki',
+        vendor: brand || 'Tanoooki',
         productType,
         ...(categoryGid ? { category: categoryGid } : {}),
         status: 'DRAFT',
