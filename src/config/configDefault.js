@@ -31,6 +31,7 @@ const defaultConfig = {
   // Note 2: To use only this built-in configuration, you need to remove the overwrite from configHelper.js (mergeConfig func)
   // Note 3: Stripe does have a minimum fee that depends on country, currency, etc!
   listingMinimumPriceSubUnits: 500,
+  marketplaceCommissionPercentage: 10,
 
   // Marketplace name is needed for microcopy (aka marketplace texts) and in meta tags (bots and social media sharing reads those)
   marketplaceName: process.env.REACT_APP_MARKETPLACE_NAME || '[Marketplace Name]',

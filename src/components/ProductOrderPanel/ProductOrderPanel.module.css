@@ -1,0 +1,109 @@
+.quantitySection,
+.shippingSection {
+  margin-bottom: 16px;
+}
+
+.quantityLabel,
+.shippingLabel {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--colorGrey700);
+}
+
+.quantitySelect,
+.shippingSelect {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--colorGrey300);
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: var(--colorWhite);
+  cursor: pointer;
+}
+
+.quantitySelect:focus,
+.shippingSelect:focus {
+  outline: none;
+  border-color: var(--colorBlack);
+}
+
+.loadingText,
+.errorText {
+  font-size: 14px;
+  color: var(--colorGrey500);
+  margin: 0;
+}
+
+.errorText {
+  color: var(--colorFail);
+}
+
+.breakdown {
+  margin: 20px 0;
+  padding: 16px;
+  background-color: var(--colorGrey50);
+  border-radius: 8px;
+}
+
+.breakdownTitle {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--colorGrey900);
+}
+
+.breakdownRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  font-size: 14px;
+  border-bottom: 1px solid var(--colorGrey100);
+}
+
+.breakdownRow:last-of-type {
+  border-bottom: none;
+}
+
+.totalRow {
+  font-weight: 700;
+  font-size: 16px;
+  padding-top: 10px;
+  margin-top: 4px;
+  border-top: 2px solid var(--colorGrey300);
+  border-bottom: none;
+}
+
+.breakdownLabel {
+  color: var(--colorGrey700);
+}
+
+.breakdownValue {
+  font-weight: 500;
+  color: var(--colorGrey900);
+}
+
+.feeExplanation {
+  font-size: 12px;
+  color: var(--colorGrey500);
+  margin: 10px 0 0;
+  font-style: italic;
+}
+
+.addToCartButton {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.ownListingMessage,
+.outOfStockMessage {
+  font-size: 14px;
+  color: var(--colorGrey500);
+  padding: 16px;
+  text-align: center;
+  background-color: var(--colorGrey50);
+  border-radius: 8px;
+  margin-top: 12px;
+}

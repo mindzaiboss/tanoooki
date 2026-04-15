@@ -55,10 +55,10 @@ import {
   Page,
   NamedLink,
   NamedRedirect,
-  OrderPanel,
   LayoutSingleColumn,
   SectionText,
 } from '../../components';
+import ProductOrderPanel from '../../components/ProductOrderPanel/ProductOrderPanel';
 
 // Related components and modules
 import TopbarContainer from '../TopbarContainer/TopbarContainer';
@@ -433,39 +433,20 @@ export const ListingPageComponent = props => {
             />
           </div>
           <div className={css.orderColumnForProductLayout}>
-            <OrderPanel
+            <ProductOrderPanel
               className={classNames(css.productOrderPanel, {
                 [css.imagesEnabled]: showListingImage,
               })}
               listing={currentListing}
               isOwnListing={isOwnListing}
               onSubmit={handleOrderSubmit}
-              authorLink={
-                <NamedLink
-                  className={css.authorNameLink}
-                  name={isVariant ? 'ListingPageVariant' : 'ListingPage'}
-                  params={params}
-                  to={{ hash: '#author' }}
-                >
-                  {authorDisplayName}
-                </NamedLink>
-              }
+              authorDisplayName={authorDisplayName}
               title={<FormattedMessage id="ListingPage.orderTitle" values={{ title: richTitle }} />}
-              titleDesktop={
-                <H4 as="h1" className={css.orderPanelTitle}>
-                  <FormattedMessage id="ListingPage.orderTitle" values={{ title: richTitle }} />
-                </H4>
+              subTitle={
+                authorDisplayName ? (
+                  <FormattedMessage id="ListingPage.hostedBy" values={{ name: authorDisplayName }} />
+                ) : null
               }
-              payoutDetailsWarning={payoutDetailsWarning}
-              author={ensuredAuthor}
-              onManageDisableScrolling={onManageDisableScrolling}
-              onContactUser={onContactUser}
-              {...restOfProps}
-              validListingTypes={config.listing.listingTypes}
-              marketplaceCurrency={config.currency}
-              dayCountAvailableForBooking={config.stripe.dayCountAvailableForBooking}
-              marketplaceName={config.marketplaceName}
-              showListingImage={showListingImage}
             />
           </div>
         </div>
