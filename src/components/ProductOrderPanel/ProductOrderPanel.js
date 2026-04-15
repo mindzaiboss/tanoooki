@@ -17,6 +17,7 @@ const ProductOrderPanel = props => {
     subTitle,
     authorDisplayName,
     isOwnListing,
+    currentUser,
   } = props;
 
   const intl = useIntl();
@@ -31,48 +32,45 @@ const ProductOrderPanel = props => {
   const publicData = listing?.attributes?.publicData || {};
   const currentStock = listing.currentStock?.attributes?.quantity || 0;
 
-  // Get seller address from publicData (assuming it's stored there)
-  const sellerAddress = publicData.sellerAddress;
+  // Get vendor username from publicData
+  const vendorUsername = publicData.vendor_username;
 
   // Get package dimensions from publicData
   const packageDimensions = {
-    weight: publicData.weight || 1,
-    weightUnit: publicData.weightUnit || 'lb',
+    weight: publicData.packageWeight || publicData.weight || 1,
+    weightUnit: publicData.packageWeightUnit || publicData.weightUnit || 'lb',
     length: publicData.length || 6,
     width: publicData.width || 6,
     height: publicData.height || 6,
     distanceUnit: publicData.distanceUnit || 'in',
   };
 
-  // Fetch shipping rates on component mount
+  // Fetch shipping rates when quantity changes or on mount
   useEffect(() => {
-    if (!sellerAddress) {
-      return;
-    }
-
     const fetchShippingRates = async () => {
       setLoadingRates(true);
       setRatesError(null);
+
+      if (!vendorUsername) {
+        console.log('No vendor username available');
+        setRatesError('Seller information not available');
+        setLoadingRates(false);
+        return;
+      }
 
       try {
         const response = await fetch('/api/shippo-rates', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            fromAddress: sellerAddress,
+            vendorUsername,
+            buyerId: currentUser?.id?.uuid || null,
             weight: packageDimensions.weight,
             weightUnit: packageDimensions.weightUnit,
             length: packageDimensions.length,
             width: packageDimensions.width,
             height: packageDimensions.height,
             distanceUnit: packageDimensions.distanceUnit,
-            addressTo: {
-              // Default to estimate for Chicago, IL (can be updated with buyer's address later)
-              name: 'Buyer',
-              city: 'Chicago',
-              state: 'IL',
-              country: 'US',
-            },
           }),
         });
 
@@ -80,7 +78,6 @@ const ProductOrderPanel = props => {
 
         if (data.success && data.rates) {
           setShippingRates(data.rates);
-          // Auto-select cheapest option
           if (data.rates.length > 0) {
             const cheapest = data.rates.reduce((min, rate) =>
               parseFloat(rate.amount) < parseFloat(min.amount) ? rate : min
@@ -99,7 +96,7 @@ const ProductOrderPanel = props => {
     };
 
     fetchShippingRates();
-  }, [sellerAddress]);
+  }, [vendorUsername, currentUser]);
 
   // Calculate prices
   const unitPrice = price ? price.amount : 0;

@@ -441,6 +441,7 @@ export const ListingPageComponent = props => {
               isOwnListing={isOwnListing}
               onSubmit={handleOrderSubmit}
               authorDisplayName={authorDisplayName}
+              currentUser={currentUser}
               title={<FormattedMessage id="ListingPage.orderTitle" values={{ title: richTitle }} />}
               subTitle={
                 authorDisplayName ? (

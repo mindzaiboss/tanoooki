@@ -165,6 +165,7 @@ module.exports = async (req, res) => {
             pub_packageWeightUnit: packageWeightUnit,
             variantId: variant?.id || null,
             sku: variant?.sku || '',
+            vendor_username: mf.vendor_username || null,
           },
         },
         images,
