@@ -567,10 +567,6 @@ const OrderPanel = props => {
             payoutDetailsWarning={payoutDetailsWarning}
             isOwnListing={isOwnListing}
           />
-        ) : !isKnownProcess ? (
-          <p className={css.errorSidebar}>
-            <FormattedMessage id="OrderPanel.unknownTransactionProcess" />
-          </p>
         ) : null}
       </ModalInMobile>
       <div className={css.openOrderForm}>
