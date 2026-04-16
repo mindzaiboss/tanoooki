@@ -250,6 +250,25 @@ module.exports = async (req, res) => {
         }],
       };
 
+      // Add return address fields only if seller is in US (ChitChats doesn't accept CA return addresses)
+      // For CA sellers, returns will use ChitChats account default address
+      // Post-launch TODO: Generate Shippo US→CA return labels when returns occur
+      if (addressFrom.country === 'US' && addressFrom.street1 && addressFrom.city && addressFrom.state && addressFrom.zip) {
+        chitchatsBody.return_name = sellerFullName;
+        chitchatsBody.return_address_1 = addressFrom.street1;
+        if (addressFrom.street2) chitchatsBody.return_address_2 = addressFrom.street2;
+        chitchatsBody.return_city = addressFrom.city.toUpperCase();
+        chitchatsBody.return_province_code = addressFrom.state;
+        chitchatsBody.return_postal_code = addressFrom.zip.replace(/\s+/g, '');
+        chitchatsBody.return_country_code = addressFrom.country;
+        if (sellerAddress.phone) chitchatsBody.return_phone = sellerAddress.phone;
+      }
+
+      console.log('=== DEBUG RETURN ADDRESS VALUES ===');
+      console.log('addressFrom.state:', addressFrom.state, 'length:', addressFrom.state?.length);
+      console.log('addressFrom.zip:', addressFrom.zip, 'length:', addressFrom.zip?.length);
+      console.log('sellerAddress raw:', JSON.stringify(sellerAddress, null, 2));
+      console.log('===================================');
       console.log('ChitChats request body:', JSON.stringify(chitchatsBody, null, 2));
 
       const chitchatsRes = await fetch(
@@ -305,7 +324,7 @@ module.exports = async (req, res) => {
           provider: 'ChitChats',
           servicelevel: { name: cleanName },
           amount: (parseFloat(r.purchase_amount) * 1.01 + 0.25).toFixed(2),
-          currency: 'USD',
+          currency: 'CAD',
           estimatedDays,
           ddpFees: (parseFloat(r.payment_amount) - parseFloat(r.purchase_amount)).toFixed(2),
         };
