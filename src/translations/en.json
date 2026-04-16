@@ -584,6 +584,7 @@
   "ListingPage.hostedBy": "Sold by {name}",
   "ListingPage.viewImagesButton": "View photos ({count})",
   "ProductOrderPanel.addToCart": "Add to Cart",
+  "ProductOrderPanel.ddpFees": "US import fees (tariff & brokerage)",
   "ProductOrderPanel.feeExplanation": "* Tanooki fee helps us maintain the marketplace and support sellers.",
   "ProductOrderPanel.orderBreakdown": "Order Summary",
   "ProductOrderPanel.outOfStock": "This item is currently out of stock.",

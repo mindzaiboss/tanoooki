@@ -8,6 +8,35 @@ import { types as sdkTypes } from '../../util/sdkLoader';
 
 import css from './ProductOrderPanel.module.css';
 
+const abbreviateCarrier = (carrier) => {
+  const abbreviations = {
+    'Canada Post': 'CP',
+    'UPS': 'UPS',
+    'DHL Express': 'DHL',
+    'USPS': 'USPS',
+  };
+  return abbreviations[carrier] || carrier;
+};
+
+const formatShippingOption = (rate) => {
+  const carrier = abbreviateCarrier(rate.provider);
+  let service = rate.servicelevel.name;
+
+  // Abbreviate service names for readability
+  if (rate.provider === 'USPS') {
+    service = service
+      .replace('Priority Mail International', 'Priority Intl.')
+      .replace('Priority Mail Express International', 'Priority Express Intl.');
+  }
+
+  const days = rate.estimatedDays;
+  const price = rate.amount;
+  const currency = rate.currency;
+
+  const daysText = typeof days === 'number' ? `${days} ${days === 1 ? 'day' : 'days'}` : `${days} days`;
+  return `${carrier} ${service} (${daysText}) - $${price}`;
+};
+
 const ProductOrderPanel = props => {
   const {
     className,
@@ -71,6 +100,9 @@ const ProductOrderPanel = props => {
             width: packageDimensions.width,
             height: packageDimensions.height,
             distanceUnit: packageDimensions.distanceUnit,
+            ...(publicData.origin_country ? { originCountry: publicData.origin_country } : {}),
+            productPrice: price?.amount ? (price.amount / 100).toFixed(2) : undefined,
+            productTitle: listing?.attributes?.title,
           }),
         });
 
@@ -106,7 +138,11 @@ const ProductOrderPanel = props => {
     ? Math.round(parseFloat(selectedShipping.amount) * 100) // Convert to cents
     : 0;
 
-  const subtotalWithShipping = subtotal + shippingAmount;
+  const ddpFeesAmount = selectedShipping?.ddpFees
+    ? Math.round(parseFloat(selectedShipping.ddpFees) * 100) // Convert to cents
+    : 0;
+
+  const subtotalWithShipping = subtotal + shippingAmount + ddpFeesAmount;
 
   const commissionPercentage = config.marketplaceCommissionPercentage || 10;
   const commissionAmount = Math.round(subtotalWithShipping * (commissionPercentage / 100));
@@ -132,8 +168,8 @@ const ProductOrderPanel = props => {
   };
 
   const handleShippingChange = (e) => {
-    const rateId = e.target.value;
-    const rate = shippingRates.find(r => r.rateId === rateId);
+    const objectId = e.target.value;
+    const rate = shippingRates.find(r => r.objectId === objectId);
     setSelectedShipping(rate);
   };
 
@@ -200,16 +236,14 @@ const ProductOrderPanel = props => {
               </label>
               <select
                 id="shipping"
-                value={selectedShipping?.rateId || ''}
+                value={selectedShipping?.objectId || ''}
                 onChange={handleShippingChange}
                 className={css.shippingSelect}
               >
-                {shippingRates.map(rate => (
-                  <option key={rate.rateId} value={rate.rateId}>
-                    {rate.carrier} {rate.service}
-                    {rate.estimatedDays && ` (${rate.estimatedDays} days)`}
-                    {' — '}
-                    ${parseFloat(rate.amount).toFixed(2)} {rate.currency}
+                {console.log('=== SHIPPING RATES ===', JSON.stringify(shippingRates, null, 2))}
+                {shippingRates.map((rate) => (
+                  <option key={rate.objectId} value={rate.objectId}>
+                    {formatShippingOption(rate)}
                   </option>
                 ))}
               </select>
@@ -247,6 +281,15 @@ const ProductOrderPanel = props => {
                   <FormattedMessage id="ProductOrderPanel.shipping" />
                 </span>
                 <span className={css.breakdownValue}>{formatPrice(shippingAmount)}</span>
+              </div>
+            )}
+
+            {ddpFeesAmount > 0 && (
+              <div className={css.breakdownRow}>
+                <span className={css.breakdownLabel}>
+                  <FormattedMessage id="ProductOrderPanel.ddpFees" />
+                </span>
+                <span className={css.breakdownValue}>{formatPrice(ddpFeesAmount)}</span>
               </div>
             )}
 
